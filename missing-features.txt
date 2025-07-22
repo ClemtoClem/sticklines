@@ -1,0 +1,132 @@
+This document outlines missing features and necessary improvements for the Sticklines game, based on the readme.txt and the current state of the code. The goal is to create a prioritized to-do list to guide future development.
+
+================================================================================
+CATEGORY 1: CORE GAMEPLAY MECHANICS
+================================================================================
+
+These features are essential for a complete and functional gameplay loop as described in the readme.
+
+1.1. **Full Shop Implementation (ShopScreen.js, GameState.js)**
+    *   **Why:** The shop is the primary method for player progression and deck-building, a core pillar of the roguelike loop.
+    *   **Tasks:**
+        *   Generate a random inventory on shop entry (e.g., 2 tiles, 1 sticker, 1 enchantment offer). The items and their rarities should be influenced by the current `ante`.
+        *   Implement "Buy" functionality for each item type:
+            *   **Tiles:** Add purchased tile to `GameState.deck`. Deduct money. Discover the tile if it's new.
+            *   **Stickers:** Add to `GameState.stickers` (max 5). Deduct money. Discover if new. Disable buy button if sticker is already owned or at max capacity.
+            *   **Enchantments:** On purchase, trigger an "enchantment application" modal. This modal must display all tile types in the player's deck, allowing them to choose one to enchant. Update the chosen tile stack in `GameState.deck`. Discover if new.
+        *   Implement the "Reroll" button. The cost should start low (e.g., $1) and increase with each use within the same shop visit.
+        *   Display the player's current money, and update it dynamically.
+        *   Implement a "Continue" button to navigate back to the Level Select screen.
+
+1.2. **Complete Tile Logic Implementation (GameScreen.js)**
+    *   **Why:** Uncommon and Rare tiles provide strategic depth. The game is shallow without their unique mechanics.
+    *   **Tasks:**
+        *   **Munching Tile:** In `calculateScoreForGrid`, when this tile is on the board, it must identify the tile to its left, remove it from the grid for the scoring calculation, and add +6 to the multiplier.
+        *   **Glass Tile:** In `getInteractionsForTile`, add logic for diagonal interactions. In `startRound`, if it scored, add +100 to the base score and permanently remove one `glass` tile from `GameState.deck`.
+        *   **Black Tile:** In `calculateScoreForGrid`, implement a two-state check. First, determine if any other placed tile is interacting *with* the Black Tile. If not, add +75 to the multiplier. If it *is* being interacted with, add +10. This is separate from its own adjacent interactions.
+        *   **Duality Tile:** In `calculateScoreForGrid`, before scoring, check for tiles on its immediate left and right. If both exist, transform the left tile into a copy of the right tile (copying its `id` and any `enchantment`). Then, proceed with its own interaction logic, scoring against the two neighbors.
+
+1.3. **Enchantment Effects (GameScreen.js, GameState.js)**
+    *   **Why:** Enchantments are a key power-up and customization vector.
+    *   **Tasks:**
+        *   **Data Structure:** Modify `GameState.deck` to store enchantment info for each tile stack (e.g., `{ id: 'blue', count: 5, enchantment: 'shiny' }`).
+        *   **Visuals:** Add a visual indicator (e.g., a star icon, a sparkle effect) to enchanted tiles in the hand, on the grid, and in UI modals.
+        *   **Gameplay Logic (`calculateScoreForGrid`):**
+            *   **Creative:** If any tile on the board has this, add +100 to base score.
+            *   **Productive:** If any tile on the board has this, add +15 to multiplier.
+            *   **Explosive:** When a scored tile has this, roll a 15% chance. On success, add +200 to score and permanently remove the tile from `GameState.deck`.
+            *   **Shiny:** When a scored tile has this, add +$2 to `GameState.money`.
+
+1.4. **Skip Level Reward Logic (GameState.js)**
+    *   **Why:** Skipping is a core strategic decision. It must provide the advertised reward.
+    *   **Tasks:**
+        *   In `GameState.skipLevel`, retrieve the `skipReward` object for the current level.
+        *   Based on the reward `type`, grant the item:
+            *   **'tile':** Add the tile to `GameState.deck`.
+            *   **'sticker':** Add the sticker to `GameState.stickers`.
+            *   **'enchantment':** Trigger the enchantment application modal, but with no cost.
+
+1.5. **Game Over / Run Failed Logic (GameScreen.js, GameState.js)**
+    *   **Why:** A roguelike needs a clear failure state to complete the loop. The current `Level Failed` screen is a soft lock for one level, not the run.
+    *   **Tasks:**
+        *   In `GameScreen.js`, when a level is failed (no more hands/tiles and goal not met), set a `runFailed` flag in `GameState`.
+        *   Modify the "Level Failed" overlay to be a "Run Failed" overlay.
+        *   Display run summary info: Ante reached, final score, etc.
+        *   The button should navigate back to the Main Menu, not Level Select.
+
+================================================================================
+CATEGORY 2: UI & USER EXPERIENCE
+================================================================================
+
+These features will make the game more polished, informative, and enjoyable to play.
+
+2.1. **Full Collection Screen Implementation (CollectionScreen.js, GameState.js)**
+    *   **Why:** Provides players with a sense of long-term progression and a reference for game mechanics.
+    *   **Tasks:**
+        *   Create tabs for "Tiles," "Enchantments," and "Stickers."
+        *   Display a grid of all items in the selected category from `GameData`.
+        *   Items not yet in `GameState.discovered` should be rendered in grayscale with a "???" name.
+        *   Implement a robust discovery system: an item is added to `GameState.discovered` the first time it is acquired or seen in the shop.
+        *   When a discovered item is clicked, show an info panel with its image, name, rarity, description, and a discovery count (which needs to be tracked).
+        *   Implement sorting controls (e.g., by Default, by Rarity, by Times Found).
+
+2.2. **Sticker Display & Management UI (LevelSelectScreen.js, GameScreen.js, ShopScreen.js)**
+    *   **Why:** Active stickers are crucial run-long buffs that the player must be able to see at all times.
+    *   **Tasks:**
+        *   Create a dedicated UI component for displaying active stickers.
+        *   Position this component in the bottom-right corner of the Level Select, Game, and Shop screens.
+        *   Each active sticker should be represented by its icon. A tooltip should appear on hover.
+        *   On the Level Select and Shop screens, allow players to click a sticker to open a confirmation prompt to sell it for half its value (value needs to be defined in `GameData`).
+
+2.3. **Deck & Hand Management UI (GameScreen.js)**
+    *   **Why:** Players need more information to make strategic decisions within a level.
+    *   **Tasks:**
+        *   Implement a "View Deck" button. On click, it should show a modal/overlay of all tiles remaining in the `levelDeck`.
+        *   Tiles currently in hand should be visually distinguished (e.g., highlighted or grayed out) in this view.
+        *   Rename the "Play Hand" button to "End Hand" for clarity, as per the readme's description of its function.
+        *   The hand should show empty slots to represent its maximum size (7).
+
+2.4. **Run-Wide Information Persistence**
+    *   **Why:** Key information needs to persist across screens for a cohesive experience.
+    *   **Tasks:**
+        *   Ensure the Money display is visible and consistent on `LevelSelectScreen`, `GameScreen`, and `ShopScreen`.
+        *   Ensure the Ante display is visible on `LevelSelectScreen` and `GameScreen`.
+
+================================================================================
+CATEGORY 3: VISUAL POLISH & ANIMATION
+================================================================================
+
+These enhancements will make the game feel more dynamic, responsive, and "alive".
+
+3.1. **Menu & UI Animations**
+    *   **Why:** To create a more engaging and professional-feeling user interface.
+    *   **Tasks:**
+        *   **Title Bob:** Add a CSS animation to make the "Sticklines" title on the menu screen gently bob up and down.
+        *   **Button Feedback:** Add a subtle "click" animation (e.g., scale down and back up quickly) to all buttons on press.
+
+3.2. **Gameplay Animations & Effects**
+    *   **Why:** To provide clear visual feedback for player actions and game events.
+    *   **Tasks:**
+        *   **Score Pop-ups:** When a hand is played, animate score/multiplier values flying from the interacting tiles to the score display at the top.
+        *   **Interaction Lines:** During the scoring phase (after "End Hand" is pressed), animate the preview lines becoming solid and "drawing" from the source tile to the target tile.
+        *   **Tile Placement/Removal:** Add a quick "pop-in" animation when placing a tile and a "fade-out" when picking it back up.
+        *   **Munching Tile Effect:** Create a specific animation for the munching tile "eating" its neighbor.
+        *   **Explosive Enchantment:** Create a dramatic explosion particle effect when this enchantment triggers.
+
+================================================================================
+CATEGORY 4: AUDIO
+================================================================================
+
+Deeper audio integration provides crucial feedback and enhances immersion.
+
+4.1. **Audio Expansion (AudioService.js, all screens)**
+    *   **Why:** More sound effects will provide better feedback and make the game more satisfying to play.
+    *   **Tasks:**
+        *   Add a generic UI click sound for all button presses.
+        *   Add a "cha-ching" or purchase sound for buying items in the shop.
+        *   Add a "reroll" sound for the reroll button.
+        *   Add a distinct, positive jingle for winning a level.
+        *   Add a negative sound/jingle for the "Run Failed" screen.
+        *   Add a powerful, ascending sound for the "Ante Up" transition.
+        *   Add a sound for applying an enchantment to a tile.
+

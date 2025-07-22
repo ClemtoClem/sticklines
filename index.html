@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sticklines</title>
+    <link rel="stylesheet" href="style.css">
+    <!--<script type="importmap">
+    {
+        "imports": {
+            "main":                 "./main.js",
+
+            "AudioService":         "./services/AudioService.js",
+            "GameLogic":            "./services/GameLogic.js",
+            "GamepadService":       "./services/GamepadService.js",
+            "GameState":            "./services/GameState.js",
+
+            "AssetManager":         "./data/AssetManager.js",
+            "GameData":             "./data/GameData.js",
+
+            "CollectionScreen":     "./components/CollectionScreen.js",
+            "GameScreen":           "./components/GameScreen.js",
+            "LevelSelectScreen":    "./components/LevelSelectScreen.js",
+            "MenuScreen":           "./components/MenuScreen.js",
+            "ShopScreen":           "./components/ShopScreen.js",
+            "Tooltip":              "./components/Tooltip.js",
+
+            "GameHeader":           "./components/game/GameHeader.js",
+            "ScorePreview":         "./components/game/ScorePreview.js",
+            "GameGrid":             "./components/game/GameGrid.js",
+            "DeckPanel":            "./components/game/DeckPanel.js",
+            "HandDisplay":          "./components/game/HandDisplay.js",
+            "StickerDisplay":       "./components/game/StickerDisplay.js",
+            "ControlsPanel":        "./components/game/ControlsPanel.js"
+        }
+    }
+    </script>-->
+</head>
+<body>
+    <div id="app" style="image-rendering: pixelated;"></div>
+    <div id="tooltip" class="tooltip"></div>
+    <div id="game-over-screen" class="game-over-overlay">
+        <div class="game-over-box">
+            <h2>Run Failed</h2>
+            <div id="run-summary"></div>
+            <button class="menu-button" id="game-over-back-btn small-button">Back to Menu</button>
+        </div>
+    </div>
+    <div id="loading-screen">
+        <div class="loading-text">Loading...</div>
+    </div>
+    <script type="module" src="./main.js"></script>
+</body>
+</html>
