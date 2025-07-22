@@ -1,11 +1,11 @@
 @font-face {
     font-family: 'Undertale';
-    src: url('/assets/fonts/undertale-deltarune-text-font-extended.ttf') format('truetype');
+    src: url('./assets/fonts/undertale-deltarune-text-font-extended.ttf') format('truetype');
 }
 
 @font-face {
     font-family: 'DePixel';
-    src: url('/assets/fonts/DePixelHalbfett.ttf') format('truetype');
+    src: url('./assets/fonts/DePixelHalbfett.ttf') format('truetype');
 }
 
 :root {
