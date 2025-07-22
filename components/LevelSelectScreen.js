@@ -3,6 +3,8 @@ import AudioService     from '../services/AudioService.js';
 import GameData         from '../data/GameData.js';
 import GamepadService   from '../services/GamepadService.js';
 
+const GAME_MUSIC_PLAYLIST = ['/samba race.mp3', '/rotation.mp3', '/Baskick.mp3', '/Aldebaran.mp3', '/Scoreboard.mp3', '/Onefin Square.mp3'];
+
 class LevelSelectScreen {
     constructor(gameState, navigateTo, tooltip) {
         this.gameState = gameState;
@@ -48,10 +50,11 @@ class LevelSelectScreen {
 
     updateSelectableElements() {
         const anteUpBtn = this.element.querySelector('.ante-up-btn');
+        const backBtn = this.element.querySelector('#level-select-back-btn');
         if (anteUpBtn) {
             this.selectableElements = [anteUpBtn];
         } else {
-            this.selectableElements = [this.element.querySelector('#level-select-back-btn'), ...Array.from(this.element.querySelectorAll('.level-button.available .menu-button'))];
+            this.selectableElements = [ backBtn, ...Array.from(this.element.querySelectorAll('.level-button.available .menu-button')) ];
         }
         
         if (this.isGamepadActive) this.updateSelection();
@@ -190,11 +193,10 @@ class LevelSelectScreen {
 
     addEventListeners() {
         this.element.querySelector('#level-select-back-btn').onclick = () => {
-            //if (confirm('Are you sure you want to return to the main menu? This will end your current run.')) {
-                AudioService.playSoundEffect('ui_click');
-                this.navigateTo('menu');
-            //}
+            AudioService.playSoundEffect('ui_click');
+            this.navigateTo('menu');
         };
+
 
         this.element.querySelectorAll('.start-level-btn').forEach(btn => {
             btn.onclick = () => {
@@ -247,12 +249,12 @@ class LevelSelectScreen {
                 if (!stickerInfo) return;
 
                 const sellPrice = Math.floor(stickerInfo.price / 2);
-                //if (confirm(`Sell ${stickerInfo.name} for $${sellPrice}? This cannot be undone.`)) {
+                if (confirm(`Sell ${stickerInfo.name} for $${sellPrice}? This cannot be undone.`)) {
                     AudioService.playSoundEffect('buy_item');
                     this.gameState.money += sellPrice;
                     this.gameState.stickers = this.gameState.stickers.filter(s => s.id !== stickerId);
                     this.render();
-                //}
+                }
             };
         });
     }
@@ -262,6 +264,7 @@ class LevelSelectScreen {
     }
 
     show(options) {
+        AudioService.playMusic(GAME_MUSIC_PLAYLIST);
         this.render();
         this.element.classList.add('active');
         GamepadService.addEventListener('gamepad:any', this.handleAnyGamepadInput);

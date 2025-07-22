@@ -34,8 +34,8 @@ These features are essential for a complete and functional gameplay loop as desc
         *   **Gameplay Logic (`calculateScoreForGrid`):**
             *   **Creative:** If any tile on the board has this, add +100 to base score.
             *   **Productive:** If any tile on the board has this, add +15 to multiplier.
-            *   **Explosive:** When a scored tile has this, roll a 15% chance. On success, add +200 to score and permanently remove the tile from `GameState.deck`.
-            *   **Shiny:** When a scored tile has this, add +$2 to `GameState.money`.
+            *   **Explosive:** When a scored_tile has this, roll a 15% chance. On success, add +200 to score and permanently remove the tile from `GameState.deck`.
+            *   **Shiny:** When a scored_tile has this, add +$2 to `GameState.money`.
 
 1.4. **Skip Level Reward Logic (GameState.js)**
     *   **Why:** Skipping is a core strategic decision. It must provide the advertised reward.
@@ -110,7 +110,7 @@ These enhancements will make the game feel more dynamic, responsive, and "alive"
         *   **Score Pop-ups:** When a hand is played, animate score/multiplier values flying from the interacting tiles to the score display at the top.
         *   **Interaction Lines:** During the scoring phase (after "End Hand" is pressed), animate the preview lines becoming solid and "drawing" from the source tile to the target tile.
         *   **Tile Placement/Removal:** Add a quick "pop-in" animation when placing a tile and a "fade-out" when picking it back up.
-        *   **Munching Tile Effect:** Create a specific animation for the munching tile "eating" its neighbor.
+        *   **Munching Tile Effect:** Create a specific animation for the munching_tile "eating" its neighbor.
         *   **Explosive Enchantment:** Create a dramatic explosion particle effect when this enchantment triggers.
 
 ================================================================================

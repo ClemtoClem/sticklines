@@ -37,4 +37,3 @@ class StickerDisplay {
 }
 
 export default StickerDisplay;
-

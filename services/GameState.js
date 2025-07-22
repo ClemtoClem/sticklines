@@ -275,7 +275,8 @@ class GameState {
         // Add 2 tiles
         for (let i = 0; i < 2; i++) {
             const rarityRoll = Math.random();
-            const rarity = rarityRoll < 0.65 ? 'Common' : (rarityRoll < 0.9 ? 'Uncommon' : 'Rare');
+            // Adjusted rarities: More chance for Uncommon/Rare/Legendary
+            const rarity = rarityRoll < 0.55 ? 'Common' : (rarityRoll < 0.85 ? 'Uncommon' : (rarityRoll < 0.97 ? 'Rare' : 'Legendary'));
             const potentialTiles = Object.values(GameData.tiles).filter(t => t.rarity === rarity && this.shopStock.tiles[t.id] > 0);
             if (potentialTiles.length > 0) {
                 const tile = potentialTiles[Math.floor(Math.random() * potentialTiles.length)];

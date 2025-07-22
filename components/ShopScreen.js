@@ -5,6 +5,7 @@ import GamepadService   from '../services/GamepadService.js';
 
 const MAX_DECK_SIZE = 40;
 const STICKER_INITIAL_DURATION = 3;
+const GAME_MUSIC_PLAYLIST = ['/samba race.mp3', '/rotation.mp3', '/Baskick.mp3', '/Aldebaran.mp3', '/Scoreboard.mp3', '/Onefin Square.mp3'];
 
 class ShopScreen {
     constructor(gameState, navigateTo, tooltip) {
@@ -12,6 +13,7 @@ class ShopScreen {
         this.navigateTo = navigateTo;
         this.element = this.createEmptyScreen();
         this.tooltip = tooltip;
+        this.selectionTooltipElement = document.getElementById('selection-tooltip');
 
         // Modal state
         this.activeModal = null; // 'enchant', 'sell', 'sell-detail'
@@ -28,6 +30,7 @@ class ShopScreen {
         this.selectedModalGridIndex = 0;
         this.selectedModalFooterIndex = 0;
         this.selectableElements = {};
+        this.heldItemForTooltip = null;
 
         this.handleGamepadInput = this.handleGamepadInput.bind(this);
         this.handleAnyGamepadInput = this.handleAnyGamepadInput.bind(this);
@@ -41,10 +44,10 @@ class ShopScreen {
     }
 
     render() {
-        if (isNaN(this.gameState.money)) {
-            this.gameState.money = 0;
+        if (this.activeModal) {
+            this.tooltip.hide();
+            this.hideSelectionTooltip();
         }
-
         this.element.innerHTML = `
             <div class="shop-header">
                 <button id="secret-unlock-shop-btn"></button>
@@ -80,7 +83,7 @@ class ShopScreen {
             const deckFull = deck.length >= MAX_DECK_SIZE;
             const canBuy = canAfford && !deckFull;
             itemsHtml += `
-                <div class="shop-item" data-tooltip-type="tiles" data-tooltip-id="${item.id}">
+                <div class="shop-item" data-tooltip-type="tiles" data-tooltip-id="${item.id}" data-item-type="tile" data-item-id="${item.id}">
                     <div class="shop-item-icon" style="background-image: url(${AssetManager.getImage(item.asset).src}); border-color: var(--color-rarity-${item.rarity.toLowerCase()})"></div>
                     <div class="shop-item-name">${item.name}</div>
                     <div class="shop-item-rarity" style="color: var(--color-rarity-${item.rarity.toLowerCase()})">${item.rarity}</div>
@@ -104,7 +107,7 @@ class ShopScreen {
              else if (!canAfford) disabledReason = ''; // Price shown is enough reason
 
              itemsHtml += `
-                <div class="shop-item" data-tooltip-type="stickers" data-tooltip-id="${item.id}">
+                <div class="shop-item" data-tooltip-type="stickers" data-tooltip-id="${item.id}" data-item-type="sticker" data-item-id="${item.id}">
                     <div class="shop-item-icon" style="background-image: url(${AssetManager.getImage(item.asset).src}); border-color: var(--color-rarity-${item.rarity.toLowerCase()})"></div>
                     <div class="shop-item-name">${item.name}</div>
                     <div class="shop-item-rarity" style="color: var(--color-rarity-${item.rarity.toLowerCase()})">${item.rarity}</div>
@@ -118,7 +121,7 @@ class ShopScreen {
         shopInventory.enchantments.forEach(item => {
             const canAfford = money >= item.price;
             itemsHtml += `
-                 <div class="shop-item" data-tooltip-type="enchantments" data-tooltip-id="${item.id}">
+                 <div class="shop-item" data-tooltip-type="enchantments" data-tooltip-id="${item.id}" data-item-type="enchantment" data-item-id="${item.id}">
                     <div class="shop-item-icon" style="background-image: url(${AssetManager.getImage(item.asset).src}); border-color: var(--color-rarity-${item.rarity.toLowerCase()})"></div>
                     <div class="shop-item-name">${item.name}</div>
                     <div class="shop-item-rarity" style="color: var(--color-rarity-${item.rarity.toLowerCase()})">Enchantment</div>
@@ -207,7 +210,7 @@ class ShopScreen {
         }, {});
         
         return `
-            <div class="modal-overlay">
+             <div class="modal-overlay">
                 <div class="modal-content">
                     <h2>Sell Tiles (Deck: ${this.gameState.deck.length}/${MAX_DECK_SIZE})</h2>
                     <div class="modal-grid">
@@ -251,7 +254,7 @@ class ShopScreen {
                         `).join('')}
                     </div>
                     <div class="modal-footer">
-                        <button class="menu-button" data-type="back-to-sell-menu small-button">Back</button>
+                        <button class="menu-button small-button" data-type="back-to-sell-menu">Back</button>
                         <button class="menu-button" data-type="sell-two" ${sellableTilesCount < 2 ? 'disabled' : ''}>Sell 2</button>
                         <button class="menu-button" id="modal-cancel-btn">Exit</button>
                     </div>
@@ -262,11 +265,11 @@ class ShopScreen {
 
     addEventListeners() {
         this.element.querySelector('#secret-unlock-shop-btn').onclick = () => {
-            //if (confirm('Unlock all items for this shop visit?')) {
+            if (confirm('Unlock all items for this shop visit?')) {
                 AudioService.playSoundEffect('enchant_apply');
                 this.gameState.unlockAllShopItems();
                 this.render();
-            //}
+            }
         };
 
         this.element.querySelector('#continue-btn').onclick = () => {
@@ -286,8 +289,18 @@ class ShopScreen {
         // Tooltips
         this.element.querySelectorAll('[data-tooltip-id]').forEach(el => {
             el.onmouseenter = (e) => this.tooltip.show(e.currentTarget);
-            el.onmouseleave = () => this.tooltip.hide();
+            el.onmouseleave = () => {
+                this.tooltip.hide();
+                if (!this.isGamepadActive) {
+                    this.hideSelectionTooltip();
+                }
+            };
             el.onmousemove = (e) => this.tooltip.move(e);
+        });
+
+        // Add touch/click listener for selection tooltips
+        this.element.querySelectorAll('.shop-item').forEach(el => {
+            el.addEventListener('click', (e) => this.handleItemClick(e));
         });
 
         // Modal listeners
@@ -297,6 +310,7 @@ class ShopScreen {
                 this.activeModal = null;
                 this.enchantmentToApply = null;
                 this.isFreeEnchant = false; // Reset free enchant flag
+                this.hideSelectionTooltip();
                 this.render();
             };
             this.element.querySelectorAll('[data-type="enchant-tile"]').forEach(btn => btn.onclick = e => this.handleEnchant(e));
@@ -318,6 +332,19 @@ class ShopScreen {
                 this.element.querySelector('[data-type="sell-two"]').onclick = () => this.handleSellTwo();
             }
         }
+    }
+
+    handleItemClick(e) {
+        if (this.isGamepadActive) return; // Prevent mouse clicks from interfering with gamepad
+        const itemElement = e.currentTarget;
+        const itemId = itemElement.dataset.itemId;
+        const itemType = itemElement.dataset.itemType;
+        
+        const itemData = GameData[`${itemType}s`][itemId];
+        if (!itemData) return;
+
+        // Show selection tooltip
+        this.showSelectionTooltip(itemData, itemElement);
     }
 
     handleBuy(e) {
@@ -351,6 +378,7 @@ class ShopScreen {
             this.gameState.money -= price;
             AudioService.playSoundEffect('buy_item');
         }
+        this.hideSelectionTooltip();
         this.render();
     }
     
@@ -360,12 +388,12 @@ class ShopScreen {
         if (stickerIndex > -1) {
             const sticker = this.gameState.stickers[stickerIndex];
             const sellPrice = Math.floor(sticker.price / 2);
-            //if (confirm(`Sell ${sticker.name} for $${sellPrice}?`)) {
+            if (confirm(`Sell ${sticker.name} for $${sellPrice}?`)) {
                 this.gameState.money += sellPrice;
                 this.gameState.stickers.splice(stickerIndex, 1);
                 AudioService.playSoundEffect('buy_item'); // Reuse buy sound for selling
                 this.render();
-            //}
+            }
         }
     }
 
@@ -375,6 +403,7 @@ class ShopScreen {
             this.gameState.generateShopInventory();
             this.gameState.rerollCost++;
             AudioService.playSoundEffect('reroll');
+            this.hideSelectionTooltip();
             this.render();
         }
     }
@@ -394,6 +423,7 @@ class ShopScreen {
                 this.activeModal = null;
                 this.enchantmentToApply = null;
                 this.navigateTo('levelSelect');
+                return; // Prevent re-render of shop
             } else {
                  // otherwise re-render shop with updated state.
                 this.activeModal = null;
@@ -470,6 +500,20 @@ class ShopScreen {
         if (selectedEl) {
             selectedEl.classList.add('gamepad-selected');
             selectedEl.focus();
+            
+            // Update selection tooltip for gamepad navigation
+            if (this.gamepadFocus === 'grid' && !this.activeModal) {
+                const itemId = selectedEl.dataset.itemId;
+                const itemType = selectedEl.dataset.itemType;
+                if (itemId && itemType) {
+                    const itemData = GameData[`${itemType}s`][itemId];
+                    this.showSelectionTooltip(itemData, selectedEl);
+                }
+            } else {
+                this.hideSelectionTooltip();
+            }
+        } else {
+            this.hideSelectionTooltip();
         }
     }
 
@@ -502,22 +546,30 @@ class ShopScreen {
         };
         
         if (detail.button === 'A' && detail.down) {
+            // Clicking via gamepad should not hide the tooltip immediately, the action will.
             clickFocused();
             return;
         }
 
+        if (detail.button === 'B' && detail.down && this.activeModal) {
+             this.element.querySelector('#modal-cancel-btn')?.click();
+             return;
+        }
+
         if (this.activeModal) {
+            const gridItems = this.selectableElements.modalGrid;
+            const footerItems = this.selectableElements.modalFooter;
             if (this.modalGamepadFocus === 'grid') {
                 if (detail.button === 'right' && detail.down) { this.selectedModalGridIndex++; selectionChanged = true; }
                 if (detail.button === 'left' && detail.down) { this.selectedModalGridIndex--; selectionChanged = true; }
-                if ((detail.button === 'down' && detail.down) && this.selectableElements.modalFooter.length > 0) {
+                if ((detail.button === 'down' && detail.down) && footerItems.length > 0) {
                     this.modalGamepadFocus = 'footer';
                     selectionChanged = true;
                 }
             } else { // footer focus
                 if (detail.button === 'right' && detail.down) { this.selectedModalFooterIndex++; selectionChanged = true; }
                 if (detail.button === 'left' && detail.down) { this.selectedModalFooterIndex--; selectionChanged = true; }
-                if ((detail.button === 'up' && detail.down) && this.selectableElements.modalGrid.length > 0) {
+                if ((detail.button === 'up' && detail.down) && gridItems.length > 0) {
                     this.modalGamepadFocus = 'grid';
                     selectionChanged = true;
                 }
@@ -547,6 +599,7 @@ class ShopScreen {
     }
 
     show(options) {
+        AudioService.playMusic(GAME_MUSIC_PLAYLIST);
         this.isGamepadActive = false; // Reset on show
         this.isFreeEnchant = false;
         if (options && options.freeEnchantment) {
@@ -566,6 +619,7 @@ class ShopScreen {
     hide() {
         this.element.classList.remove('active');
         this.tooltip.hide();
+        this.hideSelectionTooltip();
         this.activeModal = null;
         this.isGamepadActive = false;
         this.element.querySelectorAll('.gamepad-selected').forEach(el => el.classList.remove('gamepad-selected'));
@@ -576,6 +630,44 @@ class ShopScreen {
 
     getElement() {
         return this.element;
+    }
+
+    showSelectionTooltip(itemData, itemElement) {
+        if (!itemData || !itemElement) {
+            this.hideSelectionTooltip();
+            return;
+        }
+
+        this.tooltip.hide(); // Hide hover tooltip
+
+        this.selectionTooltipElement.innerHTML = `
+            <div class="selection-tooltip-title">${itemData.name}</div>
+            <div class="selection-tooltip-body">${itemData.tooltip}</div>
+        `;
+        this.selectionTooltipElement.classList.add('active');
+
+        const itemRect = itemElement.getBoundingClientRect();
+        const tooltipRect = this.selectionTooltipElement.getBoundingClientRect();
+        
+        let top = itemRect.bottom + 10; // 10px spacing below the item
+        let left = itemRect.left + (itemRect.width / 2) - (tooltipRect.width / 2);
+
+        // Prevent going off-screen
+        if (left < 0) left = 5;
+        if (left + tooltipRect.width > window.innerWidth) left = window.innerWidth - tooltipRect.width - 5;
+        if (top + tooltipRect.height > window.innerHeight) {
+            top = itemRect.top - tooltipRect.height - 10; // Position above if no space below
+        }
+
+        this.selectionTooltipElement.style.top = `${top}px`;
+        this.selectionTooltipElement.style.left = `${left}px`;
+    }
+
+    hideSelectionTooltip() {
+        if (this.selectionTooltipElement) {
+            this.selectionTooltipElement.classList.remove('active');
+        }
+        this.heldItemForTooltip = null;
     }
 }
 

@@ -3,12 +3,19 @@ const PREFIX_SOUND_PATH = "./assets/sounds/";
 class AudioService {
     constructor() {
         this.audioContext = null;
+        this.gainNode = null;
         this.currentMusicSource = null;
         this.playlist = [];
         this.currentTrackIndex = 0;
         this.isInitialized = false;
         this.soundData = {}; // Will store ArrayBuffers
         this.decodedSoundBuffers = {}; // Will store decoded AudioBuffers
+        this._musicPlaylistToPlay = null; // To hold music requested before init
+        this.currentPlaylist = null; // Track the current playlist for checks
+        this.isLoading = false; // To prevent starting new music while one is loading
+
+        this.musicVolume = 0.5; // Default volume at 50%
+        this.isMuted = false;
     }
 
     init() {
@@ -18,8 +25,18 @@ class AudioService {
             if (this.audioContext === null) {
                 try {
                     this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    this.gainNode = this.audioContext.createGain();
+                    this.gainNode.connect(this.audioContext.destination);
+                    this.setVolume(this.musicVolume);
+                    if (this.isMuted) this.setMute(true);
+
                     console.log("AudioContext created.");
                     this.decodeAllSounds();
+                    // If music was requested before context was ready, play it now.
+                    if (this._musicPlaylistToPlay) {
+                        this.playMusic(this._musicPlaylistToPlay.playlist, this._musicPlaylistToPlay.startWith);
+                        this._musicPlaylistToPlay = null;
+                    }
                 } catch (e) {
                     console.error("Failed to create AudioContext:", e);
                     return; // Can't proceed without an audio context
@@ -46,13 +63,13 @@ class AudioService {
     }
 
     async loadSound(key, url) {
-        const fullPath = PREFIX_SOUND_PATH + url;
+        const trackUrl = PREFIX_SOUND_PATH + url;
         try {
-            const response = await fetch(fullPath);
+            const response = await fetch(trackUrl);
             const arrayBuffer = await response.arrayBuffer();
             this.soundData[key] = arrayBuffer;
         } catch (error) {
-            console.error(`Error loading sound data for ${fullPath}:`, error);
+            console.error(`Error loading sound data for ${key}:`, error);
         }
     }
 
@@ -85,49 +102,71 @@ class AudioService {
         }
         const source = this.audioContext.createBufferSource();
         source.buffer = this.decodedSoundBuffers[key];
-        source.connect(this.audioContext.destination);
+        source.connect(this.audioContext.destination); // Sound effects play at full volume
         source.start(0);
     }
 
-    async playMusic(playlist) {
-        if (this.isPlaying()) {
-            return; // Already playing, do nothing.
+    playMusic(playlist, startWith = null) {
+        // If music is already playing or currently loading, do nothing.
+        if (this.isPlaying() || this.isLoading) {
+            // And if it's the same playlist, we definitely don't need to do anything.
+            if (this.currentPlaylist && JSON.stringify(this.currentPlaylist) === JSON.stringify(playlist)) {
+                return;
+            }
         }
-
+        
+        // If other music is playing, stop it first.
+        this.stopMusic();
+        
         if (!this.audioContext) {
             console.warn("AudioContext not ready, music deferred.");
-            // We can try to play music once the context is initialized
-            const playWhenReady = (e) => {
-                if(this.audioContext && !this.isPlaying()) {
-                    this.playMusic(playlist);
-                    window.removeEventListener('click', playWhenReady, true);
-                    window.removeEventListener('keydown', playWhenReady, true);
-                }
-            };
-            window.addEventListener('click', playWhenReady, true);
-            window.addEventListener('keydown', playWhenReady, true);
+            this._musicPlaylistToPlay = { playlist, startWith }; // Store playlist and start track
             return;
         }
 
-        this.playlist = playlist;
-        this.currentTrackIndex = Math.floor(Math.random() * this.playlist.length);
+        this.playlist = [...playlist]; // Make a copy
+        this.currentPlaylist = playlist; // Store reference for comparison
+        if (this.playlist.length === 0) return;
+        
+        if (startWith && Array.isArray(startWith) && startWith.length > 0) {
+            // Pick a random starting track from the provided list
+            const startTrack = startWith[Math.floor(Math.random() * startWith.length)];
+            const startIndex = this.playlist.indexOf(startTrack);
+
+            if (startIndex !== -1) {
+                // Move the chosen start track to the beginning of the shuffled playlist
+                this.playlist.splice(startIndex, 1);
+                this.playlist.sort(() => Math.random() - 0.5); // Shuffle the rest
+                this.playlist.unshift(startTrack); // Add start track to the front
+                this.currentTrackIndex = 0;
+            } else {
+                // If start track not in playlist, just shuffle
+                this.playlist.sort(() => Math.random() - 0.5);
+                this.currentTrackIndex = 0;
+            }
+        } else {
+             this.currentTrackIndex = Math.floor(Math.random() * this.playlist.length);
+        }
+
         this.playNextTrack();
     }
 
     async playNextTrack() {
-        if (this.playlist.length === 0 || this.currentMusicSource) return;
+        if (this.playlist.length === 0 || this.currentMusicSource || this.isLoading) return;
 
-        const fullPath = PREFIX_SOUND_PATH + this.playlist[this.currentTrackIndex];
+        this.isLoading = true;
+        const trackUrl = PREFIX_SOUND_PATH + this.playlist[this.currentTrackIndex];
         
         try {
-            const response = await fetch(fullPath);
+            const response = await fetch(trackUrl);
             const arrayBuffer = await response.arrayBuffer();
             const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
 
             this.currentMusicSource = this.audioContext.createBufferSource();
             this.currentMusicSource.buffer = audioBuffer;
-            this.currentMusicSource.connect(this.audioContext.destination);
+            this.currentMusicSource.connect(this.gainNode);
             this.currentMusicSource.start();
+            this.isLoading = false; // Finished loading and is now playing
 
             this.currentMusicSource.onended = () => {
                 this.currentMusicSource = null; // Clear the source before playing next
@@ -135,7 +174,8 @@ class AudioService {
                 this.playNextTrack();
             };
         } catch (error) {
-            console.error(`Error playing audio track ${fullPath}:`, error);
+            console.error(`Error playing audio track ${trackUrl}:`, error);
+            this.isLoading = false; // Reset loading state on error
             // In case of error, clear source and try next track after a delay
             this.currentMusicSource = null; 
             setTimeout(() => {
@@ -152,10 +192,41 @@ class AudioService {
             this.currentMusicSource = null;
         }
         this.playlist = [];
+        this.currentPlaylist = null;
+        this.isLoading = false; // Ensure loading is reset when stopping
     }
 
     isPlaying() {
         return this.currentMusicSource !== null;
+    }
+
+    setVolume(volume) {
+        this.musicVolume = parseFloat(volume);
+        if (this.gainNode && !this.isMuted) {
+            this.gainNode.gain.setValueAtTime(this.musicVolume, this.audioContext.currentTime);
+        }
+    }
+
+    toggleMute() {
+        this.setMute(!this.isMuted);
+    }
+
+    setMute(isMuted) {
+        this.isMuted = isMuted;
+        if (this.gainNode) {
+            if (this.isMuted) {
+                this.gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
+            } else {
+                this.setVolume(this.musicVolume);
+            }
+        }
+    }
+
+    getSettings() {
+        return {
+            volume: this.musicVolume,
+            isMuted: this.isMuted
+        };
     }
 }
 

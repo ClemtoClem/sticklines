@@ -2,7 +2,7 @@ import AssetManager     from '../data/AssetManager.js';
 import GameData         from '../data/GameData.js';
 import AudioService     from '../services/AudioService.js';
 import GamepadService   from '../services/GamepadService.js';
-import { getInteractionsForTile, calculateScoreForGrid } from '../services/GameLogic.js';
+import { getInteractionsForTile, calculateScoreForGrid, getRotatedDirection, ROTATION_MAP, getTileInfo } from '../services/GameLogic.js';
 import GameHeader       from './game/GameHeader.js';
 import ScorePreview     from './game/ScorePreview.js';
 import GameGrid         from './game/GameGrid.js';
@@ -13,11 +13,13 @@ import ControlsPanel    from './game/ControlsPanel.js';
 
 const MAX_DECK_SIZE = 40;
 const HAND_SIZE = 7;
+const GAME_MUSIC_PLAYLIST = ['/samba race.mp3', '/rotation.mp3', '/Baskick.mp3', '/Aldebaran.mp3', '/Scoreboard.mp3', '/Onefin Square.mp3'];
 
 class GameScreen {
-    constructor(gameState, navigateTo) {
+    constructor(gameState, navigateTo, settingsModal) {
         this.gameState = gameState;
         this.navigateTo = navigateTo;
+        this.settingsModal = settingsModal;
         this.element = this.createEmptyScreen();
 
         // Instantiate child components
@@ -28,6 +30,12 @@ class GameScreen {
         this.handDisplay = new HandDisplay(this.gameState.tooltip);
         this.stickerDisplay = new StickerDisplay(this.gameState.tooltip);
         this.controlsPanel = new ControlsPanel();
+
+        // Tooltip container for in-grid tooltips
+        this.ingridTooltipContainer = document.getElementById('ingrid-tooltip-container');
+
+        // New selection tooltip element
+        this.selectionTooltipElement = document.getElementById('selection-tooltip');
 
         // Bind gamepad handlers
         this.handleAnyGamepadInput = this.handleAnyGamepadInput.bind(this);
@@ -57,7 +65,9 @@ class GameScreen {
         this.isRoundInProgress = false;
         this.isRunFailed = false;
         this.interactionLines = []; // To draw lines between interacting tiles
+        this.hoveredPlacedTile = null; // { r, c, info, lines }
         this.specialPreviews = {}; // For munching, duality etc.
+        this.hoveredGhost = null; // {r, c, tile} for ghost rendering
         this.showDeckPanel = false;
         this.showControlsPanel = false;
         this.blockedInHand = new Set(); // For blocking tile
@@ -117,15 +127,16 @@ class GameScreen {
 
         const scoreReached = this.currentScore >= this.levelData.goal;
         const hasPlayableTiles = this.hand.some(t => t !== null);
-        // Fail if out of hands and no more tiles can be played
-        const outOfResources = this.handsRemaining <= 0 && !hasPlayableTiles;
+        // Fail if out of hands and score not reached. This is checked after a hand is played.
+        const outOfResources = this.handsRemaining <= 0 && !scoreReached;
         
-        if (outOfResources && !scoreReached && !this.isRunFailed) {
+        if (outOfResources && !this.isRunFailed) {
             this.isRunFailed = true;
             this.gameState.failRun(this.currentScore);
         }
 
         const preview = this.calculateScorePreview();
+        const allInteractionLines = [...this.interactionLines, ...(this.hoveredPlacedTile ? this.hoveredPlacedTile.lines : [])];
 
         this.element.innerHTML = `
             ${this.header.render({
@@ -146,11 +157,13 @@ class GameScreen {
                 <div id="game-grid-container" class="game-grid-container">
                     ${this.gameGrid.render({ 
                         grid: this.grid, 
-                        interactionLines: this.interactionLines, 
+                        interactionLines: allInteractionLines,
                         specialPreviews: this.specialPreviews,
+                        hoveredGhost: this.hoveredGhost,
                         gamepadActive: this.gamepadActive,
                         gridCursor: this.gridCursor,
-                        gamepadFocus: this.gamepadFocus
+                        gamepadFocus: this.gamepadFocus,
+                        hoveredPlacedTile: this.hoveredPlacedTile
                     })}
                     ${this.showDeckPanel ? this.deckPanel.render({ 
                         gameState: this.gameState, 
@@ -166,14 +179,18 @@ class GameScreen {
 
             <div class="game-footer">
                 ${this.handDisplay.render({ hand: this.hand, heldTile: this.heldTile, blockedInHand: this.blockedInHand })}
-                <button class="menu-button small-button end-hand-btn" ${this.isRoundInProgress || this.isRunFailed || scoreReached || !this.grid.flat().some(c => c) ? 'disabled' : ''}>End Hand</button>
+                <button class="menu-button end-hand-btn" ${this.isRoundInProgress || this.isRunFailed || scoreReached || !this.grid.flat().some(c => c) ? 'disabled' : ''}>End Hand</button>
+            </div>
+            
+            <div class="settings-button-ingame">
+                <button class="menu-button small-button" id="game-settings-btn">Settings</button>
             </div>
             
             ${this.isRunFailed ? this.renderRunFailed() : ''}
         `;
         this.addEventListeners();
         // Manually update overlays after render to ensure elements exist
-        this.gameGrid.updateInteractionOverlay(this.element.querySelector('#game-grid'), this.interactionLines);
+        this.gameGrid.updateInteractionOverlay(this.element.querySelector('#game-grid-container'), allInteractionLines);
         this.gameGrid.updateSpecialPreviews(this.element.querySelector('#game-grid-container'), this.specialPreviews);
     }
     
@@ -226,9 +243,29 @@ class GameScreen {
         }
 
         const tileAsset = AssetManager.getImage(tile.asset);
-        return `<div class="tile placed-tile ${isNew ? 'pop-in' : ''}" style="background-image: url(${tileAsset.src});">
+        // Add rotation class for rubik's preview on a placed tile
+        const rotationClass = this.specialPreviews[`${cell.r}-${cell.c}`] && this.specialPreviews[`${cell.r}-${cell.c}`].type === 'rubiks' ? 'rotated-by-rubiks-preview' : '';
+
+        return `<div class="tile placed-tile ${isNew ? 'pop-in' : ''} ${rotationClass}" style="background-image: url(${tileAsset.src});">
             ${tile.enchantment ? '<div class="enchantment-star"></div>' : ''}
         </div>`;
+    }
+
+    renderSpecialPreview(preview) {
+        const previewClass = preview.type === 'munch' ? 'munching' : preview.type === 'duality' ? 'duality' : 'shy';
+        const ghostIcon = preview.type === 'munch' ? '<div class="munching-icon"></div>' : preview.type === 'duality' ? '<div class="duality-icon"></div>' : '<div class="shy-icon"></div>';
+        return `<div class="grid-special-preview ${previewClass}">${ghostIcon}</div>`;
+    }
+
+    renderGhostTile(ghost) {
+        // Render ghost tile only if it's being rotated by a rubik's preview.
+        if (ghost && ghost.isRotated) {
+            const tileAsset = AssetManager.getImage(ghost.tile.asset);
+            const enchantmentHtml = ghost.tile.enchantment ? `<div class="enchantment-star" data-enchantment="${ghost.tile.enchantment}"></div>` : '';
+            const rotationClass = ghost.isRotated ? 'rotated-by-rubiks-preview' : '';
+            return `<div class="tile ghost-tile ${rotationClass}" style="background-image: url(${tileAsset.src});">${enchantmentHtml}</div>`;
+        }
+        return '';
     }
 
     renderTileInHand(tile, index) {
@@ -282,19 +319,24 @@ class GameScreen {
             this.render();
         });
 
+        this.element.querySelector('#game-settings-btn')?.addEventListener('click', () => {
+            AudioService.playSoundEffect('ui_click');
+            this.settingsModal.toggle();
+        });
+
         // Event delegation for grid interactions
         const gridContainer = this.element.querySelector('#game-grid-container');
         if (gridContainer) {
             gridContainer.addEventListener('click', e => this.handleGridMouseClick(e));
             
-            gridContainer.addEventListener('mouseover', (e) => {
+            gridContainer.addEventListener('mousemove', (e) => {
                 const cell = e.target.closest('.grid-cell');
                 if (cell) this.handleGridHover(cell, true);
             });
 
-            gridContainer.addEventListener('mouseout', (e) => {
-                const cell = e.target.closest('.grid-cell');
-                if (cell) this.handleGridHover(cell, false);
+            gridContainer.addEventListener('mouseleave', (e) => {
+                const gridEl = e.target.closest('#game-grid-container');
+                if (gridEl) this.handleGridHover(null, false);
             });
         }
 
@@ -345,6 +387,7 @@ class GameScreen {
         this.heldTile = null;
         this.selectedHandIndex = -1;
         this.updateAllPreviews();
+        this.handleFocusOnPlacedTile(r, c); // Update focus to the new tile
         this.render();
         return true;
     }
@@ -364,7 +407,8 @@ class GameScreen {
         this.heldTile = { tile: tileToPickup.tile, handIndex: tileToPickup.handIndex };
         this.selectedHandIndex = tileToPickup.handIndex;
         
-        this.updateAllPreviews({ r, c, tile: this.heldTile.tile });
+        this.handleFocusOnPlacedTile(null, null); // Clear placed tile focus
+        this.updateAllPreviews({ r, c });
         this.render();
         return true;
     }
@@ -383,23 +427,26 @@ class GameScreen {
         } else {
             this.placeHeldTile(r, c);
         }
+        this.updateSelectionTooltip();
     }
     
     handleGridHover(cell, isEntering) {
-        if (this.gamepadActive || !this.heldTile || this.isRoundInProgress) return;
-         
-        document.querySelectorAll('.grid-cell.hover-valid').forEach(c => c.classList.remove('hover-valid'));
-        
-        if (isEntering) {
+        if (this.gamepadActive || this.isRoundInProgress) return;
+
+        this.handleFocusOnPlacedTile(null, null); // Clear previous focus first
+    
+        if (isEntering && cell) {
             const r = parseInt(cell.dataset.r);
             const c = parseInt(cell.dataset.c);
-            const specialPreview = this.specialPreviews[`${r}-${c}`];
-            if (!this.grid[r][c] && !(specialPreview && specialPreview.type === 'duality')) {
-                cell.classList.add('hover-valid');
-                this.updateAllPreviews({ r, c, tile: this.heldTile.tile });
+            
+            if (this.grid[r][c]) { // If there's a tile placed
+                 this.handleFocusOnPlacedTile(r, c);
+            } else { // It's an empty cell for held tile preview
+                this.updateAllPreviews({ r, c });
+                this.render();
             }
-        } else {
-            this.updateAllPreviews();
+        } else { // Mouse left the grid
+            this.updateAllPreviews(null);
         }
     }
 
@@ -408,6 +455,7 @@ class GameScreen {
         const handIndex = parseInt(card.dataset.handIndex);
         if (this.blockedInHand.has(handIndex)) return;
         this.selectTileFromHand(handIndex);
+        this.updateSelectionTooltip();
     }
     
     selectTileFromHand(handIndex) {
@@ -421,6 +469,102 @@ class GameScreen {
         } else {
             this.heldTile = { tile, handIndex };
             this.selectedHandIndex = handIndex;
+            // When selecting a tile, clear placed tile focus
+            if (this.hoveredPlacedTile) {
+                this.hoveredPlacedTile = null;
+            }
+            this.updateAllPreviews(this.gamepadFocus === 'grid' ? { r: this.gridCursor.r, c: this.gridCursor.c } : null);
+        }
+        this.render();
+    }
+
+    updateSelectionTooltip() {
+        if (this.heldTile) {
+            const handElement = this.element.querySelector(`.tile-in-hand[data-hand-index="${this.heldTile.handIndex}"]`);
+            if (handElement) {
+                this.showSelectionTooltip(this.heldTile.tile, handElement);
+            }
+        } else {
+            this.hideSelectionTooltip();
+        }
+    }
+
+    showSelectionTooltip(tile, handElement) {
+        if (!tile || !handElement) return;
+
+        // Hide hover tooltip to prevent overlap
+        this.gameState.tooltip.hide();
+
+        const tileInfo = GameData.tiles[tile.id];
+        if (!tileInfo) return;
+
+        this.selectionTooltipElement.innerHTML = `
+            <div class="selection-tooltip-title">${tileInfo.name}</div>
+            <div class="selection-tooltip-body">${tileInfo.tooltip}</div>
+        `;
+
+        this.selectionTooltipElement.classList.add('active');
+
+        // Position the tooltip above the hand element
+        const handRect = handElement.getBoundingClientRect();
+        const tooltipRect = this.selectionTooltipElement.getBoundingClientRect();
+
+        let top = handRect.top - tooltipRect.height - 10; // 10px spacing
+        let left = handRect.left + (handRect.width / 2) - (tooltipRect.width / 2);
+
+        this.selectionTooltipElement.style.top = `${top}px`;
+        this.selectionTooltipElement.style.left = `${left}px`;
+    }
+
+    hideSelectionTooltip() {
+        if (this.selectionTooltipElement) {
+            this.selectionTooltipElement.classList.remove('active');
+        }
+    }
+
+    handleFocusOnPlacedTile(r, c) {
+        if ((r === null || c === null) || this.isRoundInProgress) {
+            if (this.hoveredPlacedTile) {
+                this.hoveredPlacedTile = null;
+                this.ingridTooltipContainer.innerHTML = ''; // Clear tooltip
+                this.render();
+            }
+            return;
+        }
+    
+        const cell = this.grid[r][c];
+        if (cell) {
+            const tileInfo = getTileInfo(r, c, this.grid);
+            const lines = [];
+            
+            const gridEl = this.element.querySelector('#game-grid');
+            if (gridEl) {
+                const fromCellEl = gridEl.querySelector(`.grid-cell[data-r="${r}"][data-c="${c}"]`);
+                if (fromCellEl) {
+                    const gridRect = gridEl.getBoundingClientRect();
+                    const cellRect = fromCellEl.getBoundingClientRect();
+                    
+                    this.ingridTooltipContainer.innerHTML = this.gameGrid.renderIngridTooltip(tileInfo, cell.tile);
+                    this.ingridTooltipContainer.style.left = `${cellRect.left + cellRect.width / 2}px`;
+                    this.ingridTooltipContainer.style.top = `${cellRect.top}px`;
+
+                    tileInfo.interactionTargets.forEach(target => {
+                        const toCellEl = gridEl.querySelector(`.grid-cell[data-r="${target.r}"][data-c="${target.c}"]`);
+                        if (toCellEl) {
+                            const fromX = fromCellEl.offsetLeft + fromCellEl.offsetWidth / 2;
+                            const fromY = fromCellEl.offsetTop + fromCellEl.offsetHeight / 2;
+                            const toX = toCellEl.offsetLeft + toCellEl.offsetWidth / 2;
+                            const toY = toCellEl.offsetTop + toCellEl.offsetHeight / 2;
+                            lines.push({ x1: fromX, y1: fromY, x2: toX, y2: toY, color: 'rgba(255, 165, 0, 0.9)' });
+                        }
+                    });
+                }
+            }
+    
+            this.hoveredPlacedTile = { r, c, info: tileInfo, lines };
+        } else {
+            this.hoveredPlacedTile = null;
+            this.ingridTooltipContainer.innerHTML = '';
         }
         this.render();
     }
@@ -428,30 +572,116 @@ class GameScreen {
     updateAllPreviews(hoverInfo = null) {
         this.interactionLines = [];
         this.specialPreviews = {};
-    
-        const previewGrid = JSON.parse(JSON.stringify(this.grid));
-        if (hoverInfo && hoverInfo.tile && !previewGrid[hoverInfo.r][hoverInfo.c]) {
-            previewGrid[hoverInfo.r][hoverInfo.c] = { tile: hoverInfo.tile };
+        this.hoveredGhost = null;
+
+        // 1. Create a base grid with placed tiles
+        let previewGrid = JSON.parse(JSON.stringify(this.grid));
+
+        // 2. Add the hovered tile to the grid if applicable
+        if (hoverInfo && this.heldTile && !previewGrid[hoverInfo.r][hoverInfo.c]) {
+            previewGrid[hoverInfo.r][hoverInfo.c] = { tile: this.heldTile.tile };
+            this.hoveredGhost = { r: hoverInfo.r, c: hoverInfo.c, tile: this.heldTile.tile, isRotated: false };
         }
     
+        // 3. Create a transformed grid for interaction calculations
+        let transformedGrid = JSON.parse(JSON.stringify(previewGrid));
+
+        // 4. Simulate rotations first
+        for (let r = 0; r < 5; r++) {
+            for (let c = 0; c < 5; c++) {
+                const cell = transformedGrid[r][c];
+                if (cell && cell.tile.id === 'rubiks') {
+                    const neighbors = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+                    neighbors.forEach(([dr, dc]) => {
+                        const nr = r + dr;
+                        const nc = c + dc;
+                        if (nr >= 0 && nr < 5 && nc >= 0 && nc < 5 && transformedGrid[nr][nc]) {
+                            const neighborTile = transformedGrid[nr][nc].tile;
+                            neighborTile.rotation = (neighborTile.rotation || 0) + 90;
+                            // Also mark the ghost tile if it's the one being rotated
+                            if (this.hoveredGhost && this.hoveredGhost.r === nr && this.hoveredGhost.c === nc) {
+                                this.hoveredGhost.isRotated = true;
+                            }
+                        }
+                    });
+                }
+            }
+        }
+    
+        // 5. Simulate munching and duality, and set up special previews
+        // Calculate incoming interactions on the transformed grid to check for Shy tile activation
+        const incomingInteractions = Array(5).fill(null).map(() => Array(5).fill(0));
+        for (let r = 0; r < 5; r++) {
+            for (let c = 0; c < 5; c++) {
+                const cell = transformedGrid[r][c];
+                if (!cell) continue;
+                getInteractionsForTile(cell.tile.id, r, c, transformedGrid).forEach(targetPos => {
+                    if (transformedGrid[targetPos.r][targetPos.c]) {
+                         incomingInteractions[targetPos.r][targetPos.c]++;
+                    }
+                });
+            }
+        }
+
         for (let r = 0; r < 5; r++) {
             for (let c = 0; c < 5; c++) {
                 const cell = previewGrid[r][c];
                 if (!cell) continue;
     
                 const tileId = cell.tile.id;
-    
-                if (tileId === 'munching' && c > 0 && previewGrid[r][c-1]) {
-                    this.specialPreviews[`${r}-${c-1}`] = { type: 'munch' };
-                } else if (tileId === 'duality' && c > 0 && c < 4 && previewGrid[r][c+1]) {
-                    const rightTile = previewGrid[r][c+1];
-                    this.specialPreviews[`${r}-${c-1}`] = { type: 'duality', copyAsset: rightTile.tile.asset };
+                
+                // Use rotated directions for these previews
+                const rotation = transformedGrid[r][c]?.tile.rotation || 0;
+                
+                if (tileId === 'munching') {
+                    const [dr, dc] = getRotatedDirection(ROTATION_MAP.LEFT, rotation);
+                    const targetR = r + dr; const targetC = c + dc;
+                    if (targetR >= 0 && targetR < 5 && targetC >= 0 && targetC < 5 && transformedGrid[targetR][targetC]) {
+                        this.specialPreviews[`${targetR}-${targetC}`] = { type: 'munch' };
+                        transformedGrid[targetR][targetC] = null; // Remove from transformed grid for interaction preview
+                    }
+                } else if (tileId === 'duality') {
+                    const [leftDr, leftDc] = getRotatedDirection(ROTATION_MAP.LEFT, rotation);
+                    const [rightDr, rightDc] = getRotatedDirection(ROTATION_MAP.RIGHT, rotation);
+                    const leftR = r + leftDr; const leftC = c + leftDc;
+                    const rightR = r + rightDr; const rightC = c + rightDc;
+
+                    if (leftR >= 0 && leftR < 5 && leftC >= 0 && leftC < 5 && 
+                        rightR >= 0 && rightR < 5 && rightC >= 0 && rightC < 5) {
+                        
+                        const rightTileCell = previewGrid[rightR][rightC];
+                        if (rightTileCell) {
+                             this.specialPreviews[`${leftR}-${leftC}`] = { type: 'duality', copyAsset: rightTileCell.tile.asset };
+                         
+                             // Apply transformation for logic preview. Preserve original rotation so Rubik's can affect it.
+                             const originalLeftCell = transformedGrid[leftR][leftC];
+                             transformedGrid[leftR][leftC] = JSON.parse(JSON.stringify(rightTileCell));
+                             if (originalLeftCell) {
+                                transformedGrid[leftR][leftC].tile.rotation = originalLeftCell.tile.rotation;
+                             }
+                        }
+                    }
+                } else if (tileId === 'shy') {
+                    if (incomingInteractions[r][c] === 1) {
+                        this.specialPreviews[`${r}-${c}`] = { type: 'shy' };
+                    }
+                } else if (tileId === 'rubiks') {
+                    // It doesn't need its own rotation because it doesn't move.
+                    const neighbors = [[-1, 0], [1, 0], [0, -1], [0, 1]]; // up, down, left, right
+                    neighbors.forEach(([dr, dc]) => {
+                        const nr = r + dr;
+                        const nc = c + dc;
+                        if (nr >= 0 && nr < 5 && nc >= 0 && nc < 5 && previewGrid[nr][nc]) {
+                             this.specialPreviews[`${nr}-${nc}`] = { type: 'rubiks' };
+                        }
+                    });
                 }
             }
         }
     
-        if (hoverInfo) {
-            const potentialInteractions = getInteractionsForTile(hoverInfo.tile.id, hoverInfo.r, hoverInfo.c, this.grid);
+        // 6. Calculate interaction lines for the hovered tile
+        if (hoverInfo && this.heldTile) {
+            const potentialInteractions = getInteractionsForTile(this.heldTile.tile.id, hoverInfo.r, hoverInfo.c, transformedGrid);
             const gridEl = this.element.querySelector('#game-grid');
             if (gridEl) {
                 const fromCell = gridEl.querySelector(`.grid-cell[data-r="${hoverInfo.r}"][data-c="${hoverInfo.c}"]`);
@@ -463,7 +693,7 @@ class GameScreen {
                             const fromY = fromCell.offsetTop + fromCell.offsetHeight / 2;
                             const toX = toCell.offsetLeft + toCell.offsetWidth / 2;
                             const toY = toCell.offsetTop + toCell.offsetHeight / 2;
-                            this.interactionLines.push({ x1: fromX, y1: fromY, x2: toX, y2: toY });
+                            this.interactionLines.push({ x1: fromX, y1: fromY, x2: toX, y2: toY, color: 'white' });
                         }
                     });
                 }
@@ -472,9 +702,10 @@ class GameScreen {
     }
 
     renderInteractionOverlay(gridContainer) {
+        if (!gridContainer) return;
         const svg = gridContainer.querySelector('.interaction-overlay');
         if (svg) {
-            svg.innerHTML = this.interactionLines.map(line => `<line x1="${line.x1}" y1="${line.y1}" x2="${line.x2}" y2="${line.y2}" stroke="white" stroke-width="2" stroke-dasharray="4" />`).join('');
+            svg.innerHTML = this.interactionLines.map(line => `<line x1="${line.x1}" y1="${line.y1}" x2="${line.x2}" y2="${line.y2}" stroke="${line.color || 'white'}" stroke-width="2" stroke-dasharray="4" />`).join('');
         }
     }
 
@@ -489,48 +720,21 @@ class GameScreen {
     startRound() {
         if (this.isRoundInProgress) return;
         this.isRoundInProgress = true;
+        this.gameState.tooltip.hide();
+        this.hideSelectionTooltip();
         this.heldTile = null;
         this.selectedHandIndex = -1;
+        this.hoveredGhost = null;
+        this.hoveredPlacedTile = null;
+        this.specialPreviews = {};
+        this.ingridTooltipContainer.innerHTML = '';
         
         const result = calculateScoreForGrid(this.grid, this.gameState.stickers, this.currentHandNumber);
         let finalScoreForHand = result.score * result.multiplier;
         const moneyEarnedFromShiny = { value: 0 }; // Using an object to pass by reference
-
-        // --- White Tile Logic ---
-        for (let r = 0; r < 5; r++) {
-            for (let c = 0; c < 5; c++) {
-                const cell = this.grid[r][c];
-                if (cell && cell.tile.id === 'white') {
-                    let isIsolated = true;
-                    for (let dr = -1; dr <= 1; dr++) {
-                        for (let dc = -1; dc <= 1; dc++) {
-                            if (dr === 0 && dc === 0) continue;
-                            const nr = r + dr;
-                            const nc = c + dc;
-                            if (nr >= 0 && nr < 5 && nc >= 0 && nc < 5 && this.grid[nr][nc]) {
-                                isIsolated = false;
-                                break;
-                            }
-                        }
-                        if (!isIsolated) break;
-                    }
-
-                    if (isIsolated) {
-                        if (Math.random() < 0.5) {
-                            this.gameState.addTileToDeck('black', 2);
-                            console.log("White Tile added 2 Black Tiles to deck.");
-                        } else {
-                            this.gameState.addTileToDeck('duality', 2);
-                            console.log("White Tile added 2 Duality Tiles to deck.");
-                        }
-                        // TODO: Add visual feedback for this effect.
-                    }
-                }
-            }
-        }
         
-        // --- Post-Scoring Effects (Shiny, Explosive, Shy Money, etc) ---
-        // Apply effects from calculateScoreForGrid (e.g., Orange Tile)
+        // --- Post-Scoring Effects (Shiny, Explosive, etc) ---
+        // Apply effects from calculateScoreForGrid (e.g., Orange Tile money from older versions)
         if (result.effectsToApply) {
             result.effectsToApply.forEach(effect => {
                 if (effect.type === 'gain_money') {
@@ -541,7 +745,7 @@ class GameScreen {
             });
         }
 
-        // Temporarily re-calculate incoming interactions for shy tile money. A bit inefficient but isolates logic.
+        // Temporarily re-calculate incoming interactions for other tiles.
         const incomingInteractions = Array(5).fill(null).map(() => Array(5).fill(0));
         for (let r = 0; r < 5; r++) {
             for (let c = 0; c < 5; c++) {
@@ -563,21 +767,6 @@ class GameScreen {
             const tileId = originalCell.tile.id;
             const enchantment = originalCell.tile.enchantment;
 
-            // Rubik's tile logic
-            if (tileId === 'rubiks') {
-                const interactions = getInteractionsForTile(tileId, r, c, this.grid);
-                const interactionCount = interactions.length;
-                if (interactionCount > 0) {
-                    this.gameState.addTileToDeck('colorful', interactionCount);
-                    // TODO: Add visual feedback for adding tiles
-                    console.log(`Rubik's Tile added ${interactionCount} Colorful Tiles to the deck.`);
-                }
-            }
-
-            if (tileId === 'glass') {
-                this.gameState.removeTileFromDeck('glass');
-            }
-            
             if (enchantment) {
                 if (enchantment === 'shiny') {
                     moneyEarnedFromShiny.value += 2;
@@ -594,16 +783,6 @@ class GameScreen {
                 }
             }
         });
-
-        for (let r = 0; r < 5; r++) {
-            for (let c = 0; c < 5; c++) {
-                const cell = this.grid[r][c];
-                if (cell && cell.tile.id === 'shy' && incomingInteractions[r][c] === 0) {
-                    this.gameState.money += 5;
-                    // TODO: Add visual feedback for money gain
-                }
-            }
-        }
 
         this.currentScore += finalScoreForHand;
         this.gameState.money += moneyEarnedFromShiny.value;
@@ -631,6 +810,7 @@ class GameScreen {
     }
 
     show(options) {
+        AudioService.playMusic(GAME_MUSIC_PLAYLIST);
         this.gamepadActive = false;
         this.initializeLevel(options.levelIndex);
         this.render();
@@ -644,6 +824,7 @@ class GameScreen {
     hide() {
         this.element.classList.remove('active');
         this.gameState.tooltip.hide();
+        this.hideSelectionTooltip();
         GamepadService.removeEventListener('gamepad:any', this.handleAnyGamepadInput);
         GamepadService.removeEventListener('gamepad:button', this.handleGamepadInput);
         GamepadService.removeEventListener('gamepad:axis', this.handleGamepadInput);
@@ -659,7 +840,7 @@ class GameScreen {
     }
 
     handleKeyboardInput(e) {
-        if (!this.element.classList.contains('active') || this.isRoundInProgress) return;
+        if (this.settingsModal.isVisible || !this.element.classList.contains('active') || this.isRoundInProgress || this.gameState.runFailed) return;
 
         // On first relevant keyboard input, activate cursor mode.
         const relevantKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Enter', 'Shift', 'c', 'C', 'v', 'V', '1', '2', '3', '4', '5', '6', '7', 'z', 'Z', 'x', 'X'];
@@ -747,12 +928,13 @@ class GameScreen {
         }
         
         // Rerender after any valid keyboard action
-        this.updateAllPreviews(this.heldTile ? { r: this.gridCursor.r, c: this.gridCursor.c, tile: this.heldTile.tile } : null);
+        this.updateAllPreviews(this.heldTile ? { r: this.gridCursor.r, c: this.gridCursor.c } : null);
         this.render();
+        this.updateSelectionTooltip();
     }
 
     handleGamepadInput(e) {
-        if (!this.gamepadActive || !this.element.classList.contains('active') || this.isRoundInProgress) return;
+        if (this.settingsModal.isVisible || !this.gamepadActive || !this.element.classList.contains('active') || this.isRoundInProgress || this.gameState.runFailed) return;
 
         const { detail } = e;
 
@@ -774,6 +956,9 @@ class GameScreen {
                     if (this.heldTile) {
                         this.selectTileFromHand(this.heldTile.handIndex); // This deselects it
                         this.gamepadFocus = 'grid';
+                    }
+                    if (this.hoveredPlacedTile) {
+                        this.handleFocusOnPlacedTile(null, null); // Clear hover
                     }
                     break;
                 case 'A':
@@ -798,8 +983,9 @@ class GameScreen {
             }
         }
 
-        this.updateAllPreviews(this.heldTile ? { r: this.gridCursor.r, c: this.gridCursor.c, tile: this.heldTile.tile } : null);
+        this.updateAllPreviews(this.heldTile ? { r: this.gridCursor.r, c: this.gridCursor.c } : null);
         this.render();
+        this.updateSelectionTooltip();
     }
 
     cycleHandSelection(direction) {
@@ -824,6 +1010,9 @@ class GameScreen {
         if (direction === 'left') c = Math.max(0, c - 1);
         if (direction === 'right') c = Math.min(4, c + 1);
         this.gridCursor = { r, c };
+
+        this.updateAllPreviews(this.heldTile ? { r, c } : null);
+        this.handleFocusOnPlacedTile(r, c);
     }
 
     handleGamepadConfirm() {

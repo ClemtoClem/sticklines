@@ -3,9 +3,28 @@ import GameData from "../data/GameData.js";
 class Tooltip {
     constructor(element) {
         this.element = element;
+        this.isTouchInteraction = false;
+
+        // Listen for touch events to temporarily disable hover tooltips
+        window.addEventListener('touchstart', () => {
+            this.isTouchInteraction = true;
+            this.hide(); // Hide any visible tooltip on touch
+        }, { capture: true, passive: true });
+
+        window.addEventListener('touchend', () => {
+            // Reset after a short delay to allow click events to process
+            setTimeout(() => {
+                this.isTouchInteraction = false;
+            }, 300);
+        }, { capture: true, passive: true });
     }
 
     show(targetElement) {
+        // Prevent hover tooltips during a touch interaction
+        if (this.isTouchInteraction) {
+            return;
+        }
+
         const type = targetElement.dataset.tooltipType;
         const id = targetElement.dataset.tooltipId;
         const enchantmentId = targetElement.dataset.tooltipEnchantment;

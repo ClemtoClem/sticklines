@@ -5,9 +5,12 @@ import LevelSelectScreen    from './components/LevelSelectScreen.js';
 import GameScreen           from './components/GameScreen.js';
 import ShopScreen           from './components/ShopScreen.js';
 import CollectionScreen     from './components/CollectionScreen.js';
+import SettingsModal        from './components/SettingsModal.js';
 import AudioService         from './services/AudioService.js';
 import Tooltip              from './components/Tooltip.js';
 import GamepadService       from './services/GamepadService.js';
+
+const GAME_MUSIC_PLAYLIST = ['samba race.mp3', 'rotation.mp3', 'Baskick.mp3', 'Aldebaran.mp3', 'Scoreboard.mp3', 'Onefin Square.mp3'];
 
 class App {
     constructor() {
@@ -18,10 +21,15 @@ class App {
         this.tooltip = new Tooltip(document.getElementById('tooltip'));
         this.gameState.tooltip = this.tooltip; // Give GameState access to tooltip
         
+        this.settingsModal = new SettingsModal(
+            document.getElementById('settings-modal-container'),
+            AudioService
+        );
+
         this.screens = {
-            menu: new MenuScreen(this.gameState, this.navigateTo.bind(this)),
+            menu: new MenuScreen(this.gameState, this.navigateTo.bind(this), this.settingsModal),
             levelSelect: new LevelSelectScreen(this.gameState, this.navigateTo.bind(this), this.tooltip),
-            game: new GameScreen(this.gameState, this.navigateTo.bind(this)),
+            game: new GameScreen(this.gameState, this.navigateTo.bind(this), this.settingsModal),
             shop: new ShopScreen(this.gameState, this.navigateTo.bind(this), this.tooltip),
             collection: new CollectionScreen(this.gameState, this.navigateTo.bind(this)),
         };
@@ -58,6 +66,12 @@ class App {
 
         this.navigateTo('menu');
         this.startUpdateLoop();
+
+        GamepadService.addEventListener('gamepad:button', e => {
+            if (e.detail.button === 'Start' && e.detail.down) {
+                this.settingsModal.toggle();
+            }
+        });
     }
 
     startUpdateLoop() {
@@ -82,11 +96,32 @@ class App {
             Final Score: ${this.gameState.finalScore}
         `;
         
-        this.gameOverScreen.querySelector('#game-over-back-btn').onclick = () => {
+        const backBtn = this.gameOverScreen.querySelector('#game-over-back-btn');
+        
+        const onAnyInput = () => {
+            backBtn.classList.add('gamepad-selected');
+        };
+
+        const onConfirm = (e) => {
+            if (e.detail.button === 'A' && e.detail.down) {
+                backBtn.click();
+            }
+        };
+
+        backBtn.onclick = () => {
             AudioService.playSoundEffect('ui_click');
             this.gameOverScreen.classList.remove('active');
+            backBtn.classList.remove('gamepad-selected');
+            GamepadService.removeEventListener('gamepad:any', onAnyInput);
+            GamepadService.removeEventListener('gamepad:button', onConfirm);
             this.navigateTo('menu');
         };
+
+        if (Object.keys(GamepadService.gamepads).length > 0) {
+            onAnyInput();
+        }
+        GamepadService.addEventListener('gamepad:any', onAnyInput);
+        GamepadService.addEventListener('gamepad:button', onConfirm);
     }
 
     navigateTo(screenName, options = {}) {
@@ -104,12 +139,9 @@ class App {
         } else {
             console.error(`Screen "${screenName}" not found!`);
         }
-
-        if (screenName === 'menu') {
-            AudioService.stopMusic();
-        } else if (this.gameState.runInProgress && !AudioService.isPlaying()) {
-            AudioService.playMusic(['Onefin Square.mp3', 'samba race.mp3', 'rotation.mp3', 'Baskick.mp3', 'Aldebaran.mp3', 'Scoreboard.mp3']);
-        }
+        /*if (this.gameState.runInProgress && !AudioService.isPlaying()) {
+            AudioService.playMusic(GAME_MUSIC_PLAYLIST);
+        }*/
     }
 }
 

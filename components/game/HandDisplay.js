@@ -11,11 +11,11 @@ class HandDisplay {
         const isBlocked = blockedInHand.has(index);
         return `
             <div class="tile-in-hand ${isHeld ? 'held' : ''} ${isBlocked ? 'blocked' : ''}" 
-                 data-hand-index="${index}" 
-                 data-tooltip-type="tiles" 
-                 data-tooltip-id="${tile.id}"
-                 ${tile.enchantment ? `data-tooltip-enchantment="${tile.enchantment}"` : ''}
-                 ${tile.enchantment ? `data-enchantment-type="${tile.enchantment}"` : ''}>
+                data-hand-index="${index}" 
+                data-tooltip-type="tiles" 
+                data-tooltip-id="${tile.id}"
+                ${tile.enchantment ? `data-tooltip-enchantment="${tile.enchantment}"` : ''}
+                ${tile.enchantment ? `data-enchantment-type="${tile.enchantment}"` : ''}>
                 <div class="tile" style="background-image: url(${tileAsset.src});">
                     ${tile.enchantment ? `<div class="enchantment-star" data-enchantment="${tile.enchantment}"></div>` : ''}
                 </div>
@@ -26,7 +26,7 @@ class HandDisplay {
         const { hand, heldTile, blockedInHand } = props;
         return `
             <div id="hand-container" class="hand-container">
-                ${Array.from({length: 7}, (_, i) => hand[i] ? this.renderTileInHand(hand[i], i, heldTile, blockedInHand) : '<div class="tile-in-hand empty"></div>').join('')}
+                ${Array.from({ length: 7 }, (_, i) => hand[i] ? this.renderTileInHand(hand[i], i, heldTile, blockedInHand) : '<div class="tile-in-hand empty"></div>').join('')}
             </div>
         `;
     }

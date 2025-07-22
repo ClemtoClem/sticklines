@@ -11,14 +11,13 @@ class AssetManager {
     async loadImage(key, src) {
         return new Promise((resolve, reject) => {
             const img = new Image();
-            const fullPath = PREFIX_IMAGES_PATH + src;
-            img.src = fullPath;
+            img.src = PREFIX_IMAGES_PATH + src;
             img.onload = () => {
                 this.images[key] = img;
                 resolve(img);
             };
             img.onerror = (err) => {
-                console.error(`Failed to load image: ${fullPath}`);
+                console.error(`Failed to load image: ${img.src}`);
                 reject(err);
             };
         });

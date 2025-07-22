@@ -133,6 +133,46 @@ body, html {
     font-family: sans-serif; /* Use a more readable font for body text */
 }
 
+/* Selection Tooltip */
+.selection-tooltip {
+    position: fixed;
+    background-color: rgba(30, 30, 30, 0.95);
+    color: var(--color-white);
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--color-gold);
+    font-size: 14px;
+    font-family: var(--font-ui);
+    z-index: 1500;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(10px);
+    transition: opacity 0.2s, transform 0.2s;
+    max-width: 250px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    text-align: center;
+}
+
+.selection-tooltip.active {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.selection-tooltip-title {
+    font-family: var(--font-main);
+    font-size: 16px;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.selection-tooltip-body {
+    font-family: sans-serif;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
 .tooltip-enchantment {
     padding: 8px;
     margin-bottom: 10px;
@@ -244,6 +284,10 @@ body, html {
     transform: scale(1.05);
 }
 
+.menu-button.gamepad-selected:not(button) {
+    transform: none; /* Prevent non-button elements from scaling */
+}
+
 .menu-button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
@@ -263,6 +307,16 @@ body, html {
     top: 20px;
     left: 20px;
     z-index: 20;
+}
+
+.top-left-container {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
 .falling-tiles-container {
@@ -671,10 +725,49 @@ body, html {
     background-color: rgba(255, 255, 255, 0.2);
 }
 
+.grid-cell.highlight-target {
+    box-shadow: inset 0 0 0 2px rgba(135, 206, 250, 0.6); /* LightSkyBlue, drawn inside the cell */
+}
+
 .grid-cell.gamepad-selected {
     border: 3px solid var(--color-gold);
     box-shadow: 0 0 10px var(--color-gold);
-    background-color: rgba(255, 215, 0, 0.2);
+}
+
+.ingrid-tooltip {
+    position: absolute;
+    bottom: calc(100% + 4px); /* Position above the cell */
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.85);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    font-size: 12px;
+    font-family: var(--font-ui);
+    z-index: 15;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    white-space: nowrap;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+}
+
+.ingrid-tooltip div {
+    text-shadow: 1px 1px 2px black;
+}
+
+.ingrid-tooltip .special-status {
+    color: #ffc107; /* Bright yellow/gold for status text */
+    font-weight: bold;
+    font-family: var(--font-main);
+    padding: 2px 4px;
+    background: rgba(255, 193, 7, 0.2);
+    border-radius: 3px;
+    margin-bottom: 3px;
 }
 
 .special-preview-container, .tile-container {
@@ -707,6 +800,22 @@ body, html {
     display: flex;
     justify-content: center;
     align-items: center;
+}
+
+.grid-special-preview.grid-preview-shy-active {
+    background-color: rgba(230, 230, 230, 0.35);
+    border: 2px solid white;
+    box-shadow: 0 0 10px white;
+}
+
+.grid-special-preview.grid-preview-rubiks-target {
+    background-color: rgba(255, 105, 180, 0.3); /* Pink */
+    border: 1px solid rgba(255, 105, 180, 0.6);
+}
+
+.tile-container.rotated-by-rubiks .tile {
+    transform: rotate(90deg);
+    transition: transform 0.25s ease-in-out;
 }
 
 .grid-preview-munch {
@@ -742,6 +851,11 @@ body, html {
     pointer-events: none; 
 }
 
+.tile.ghost-tile {
+    opacity: 0.7; /* Make it slightly more visible */
+    pointer-events: none;
+}
+
 .tile.pop-in {
     animation: pop-in 0.2s ease-out forwards;
 }
@@ -751,13 +865,30 @@ body, html {
     to { transform: scale(1); opacity: 1; }
 }
 
+.tile.pop-out {
+    animation: pop-out 0.15s ease-in forwards;
+}
+
+@keyframes pop-out {
+    from { transform: scale(1); opacity: 1; }
+    to { transform: scale(0.5); opacity: 0; }
+}
+
+.tile.rotated-by-rubiks-preview {
+    transform: rotate(90deg);
+}
+
+.transformed-cell .placed-tile {
+    pointer-events: none;
+}
+
 .enchantment-star {
     position: absolute;
     top: -5px;
     right: -5px;
     width: 20px;
     height: 20px;
-    background-image: url('./sparkle sprite.png');
+    background-image: url('/sparkle sprite.png');
     background-size: contain;
     background-repeat: no-repeat;
     pointer-events: none;
@@ -779,6 +910,10 @@ body, html {
     transform: scale(1.15);
 }
 
+.tile-container.enchanted-hover .tile {
+    /* The border is applied to the tile-container to avoid interfering with tile transforms */
+}
+
 .enchanted-border {
     position: absolute;
     top: -2px; left: -2px;
@@ -786,23 +921,24 @@ body, html {
     height: calc(100% + 4px);
     border-radius: 6px;
     animation: enchanted-glow 3s linear infinite;
-    z-index: -1;
+    z-index: -1; /* Behind the tile */
+    pointer-events: none;
 }
 
 .enchanted-border.creative {
-    border: 2px solid #ff4d4d;
+    border: 2px solid #4D94FF;
 }
 
 .enchanted-border.productive {
-    border: 2px solid #1eff00;
+    border: 2px solid var(--color-white);
 }
 
 .enchanted-border.explosive {
-    border: 2px solid #ff8000;
+    border: 2px solid #e74c3c;
 }
 
 .enchanted-border.shiny {
-    border: 2px solid var(--color-gold);
+    border: 2px solid var(--color-rarity-uncommon);
 }
 
 @keyframes enchanted-glow {
@@ -851,7 +987,7 @@ body, html {
 .tile-in-hand.blocked {
     filter: grayscale(1) brightness(0.6);
     cursor: not-allowed;
-    background-image: url('./blocking_tile.png');
+    background-image: url('/blocking_tile.png');
     background-size: 50%;
     background-repeat: no-repeat;
     background-position: center;
@@ -906,6 +1042,14 @@ body, html {
     cursor: not-allowed;
     transform: none;
     background-color: #333;
+}
+
+/* Settings button on Game Screen */
+.settings-button-ingame {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    z-index: 50;
 }
 
 .level-failed-overlay {
@@ -988,6 +1132,82 @@ body, html {
 
 #game-over-back-btn {
     font-size: 24px;
+}
+
+/* Settings Modal */
+.settings-modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.8);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 6000;
+}
+
+.settings-modal-overlay.active {
+    display: flex;
+}
+
+.settings-modal-content {
+    background: #1c1e26;
+    border: 2px solid var(--color-white);
+    border-radius: 8px;
+    padding: 30px;
+    width: 90%;
+    max-width: 450px;
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+    font-family: var(--font-main);
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+}
+
+.settings-modal-content h2 {
+    margin: 0;
+    text-align: center;
+    font-size: 28px;
+    text-shadow: 2px 2px 0px rgba(0,0,0,0.4);
+}
+
+.settings-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: var(--font-ui);
+    font-size: 18px;
+    padding: 0 10px;
+}
+
+.settings-label {
+  display: flex;
+  flex-direction: column;
+  width: 50%;
+}
+
+.settings-row label {
+    flex-basis: 40%;
+}
+
+.settings-row input[type="range"] {
+    flex-grow: 1;
+    cursor: pointer;
+}
+
+.settings-row input[type="range"].gamepad-selected {
+    box-shadow: 0 0 8px var(--color-gold);
+    border-radius: 5px;
+}
+
+#mute-toggle-btn {
+    width: 120px;
+}
+
+.settings-modal-footer {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-top: 10px;
 }
 
 .controls-panel {
@@ -1177,10 +1397,11 @@ body, html {
 .shop-items-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    align-items: start; /* Align items to the top */
     gap: 15px;
     overflow-y: auto;
     flex-grow: 1; /* Allow the grid to fill the available space in the container */
-    padding-right: 10px; /* Add some space for the scrollbar to not overlap content */
+    padding: 5px; /* Add some padding to prevent selection outline from being cut off */
 }
 
 .shop-item {
@@ -1198,7 +1419,9 @@ body, html {
 
 .shop-item.gamepad-selected {
     transform: scale(1.05);
-    border-color: var(--color-white);
+    transform-origin: center top;
+    outline: 2px solid var(--color-white);
+    outline-offset: 1px;
     box-shadow: 0 0 10px var(--color-white);
 }
 

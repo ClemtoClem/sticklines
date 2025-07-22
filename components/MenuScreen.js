@@ -3,10 +3,13 @@ import GameData         from '../data/GameData.js';
 import AudioService     from '../services/AudioService.js';
 import GamepadService   from '../services/GamepadService.js';
 
+const MENU_MUSIC_PLAYLIST = ['Onefin Square.mp3', 'Scoreboard.mp3'];
+
 class MenuScreen {
-    constructor(gameState, navigateTo) {
+    constructor(gameState, navigateTo, settingsModal) {
         this.gameState = gameState;
         this.navigateTo = navigateTo;
+        this.settingsModal = settingsModal;
         this.element = this.createMenuElement();
         this.isGamepadActive = false;
         this.selectedButtonIndex = 0;
@@ -25,20 +28,35 @@ class MenuScreen {
         fallingTilesContainer.className = 'falling-tiles-container';
         this.fallingTilesContainer = fallingTilesContainer;
 
+        const topLeftContainer = document.createElement('div');
+        topLeftContainer.className = 'top-left-container';
+
+        const collectionButton = document.createElement('button');
+        collectionButton.className = 'menu-button small-button';
+        collectionButton.id = 'collection-btn-main';
+        collectionButton.textContent = 'View Collection';
+        collectionButton.onclick = () => {
+            AudioService.playSoundEffect('ui_click');
+            this.navigateTo('collection');
+        };
+        topLeftContainer.appendChild(collectionButton);
+
+        const settingsButtonTop = document.createElement('button');
+        settingsButtonTop.className = 'menu-button small-button';
+        settingsButtonTop.id = 'settings-btn-main';
+        settingsButtonTop.textContent = 'Settings';
+        settingsButtonTop.onclick = () => {
+            AudioService.playSoundEffect('ui_click');
+            this.settingsModal.toggle();
+        };
+        topLeftContainer.appendChild(settingsButtonTop);
+
         const title = document.createElement('h1');
         title.className = 'menu-title';
         title.textContent = 'Sticklines +';
 
         const buttonsContainer = document.createElement('div');
         buttonsContainer.className = 'menu-buttons';
-
-        const collectionButton = document.createElement('button');
-        collectionButton.className = 'menu-button';
-        collectionButton.textContent = 'View Collection';
-        collectionButton.onclick = () => {
-            AudioService.playSoundEffect('ui_click');
-            this.navigateTo('collection');
-        };
 
         const startButton = document.createElement('button');
         startButton.className = 'menu-button';
@@ -47,10 +65,10 @@ class MenuScreen {
             this.startGame();
         };
 
-        buttonsContainer.appendChild(collectionButton);
         buttonsContainer.appendChild(startButton);
         
         screen.appendChild(fallingTilesContainer);
+        screen.appendChild(topLeftContainer);
         screen.appendChild(title);
         screen.appendChild(buttonsContainer);
 
@@ -111,17 +129,15 @@ class MenuScreen {
     }
 
     handleGamepadInput(e) {
-        if (!this.element.classList.contains('active')) return;
+        if (this.settingsModal.isVisible || !this.element.classList.contains('active')) return;
         const { detail } = e;
-        const buttons = this.element.querySelectorAll('.menu-button');
+        const buttons = Array.from(this.element.querySelectorAll('.menu-button'));
+        if (buttons.length === 0) return;
 
         if ((detail.button === 'down' || detail.button === 'up') && detail.down) {
             AudioService.playSoundEffect('ui_click');
-            if (detail.button === 'down') {
-                this.selectedButtonIndex = (this.selectedButtonIndex + 1) % buttons.length;
-            } else {
-                this.selectedButtonIndex = (this.selectedButtonIndex - 1 + buttons.length) % buttons.length;
-            }
+            const direction = (detail.button === 'down') ? 1 : -1;
+            this.selectedButtonIndex = (this.selectedButtonIndex + direction + buttons.length) % buttons.length;
             this.updateSelection();
             return;
         }
@@ -139,8 +155,13 @@ class MenuScreen {
     }
 
     show() {
+        AudioService.playMusic(MENU_MUSIC_PLAYLIST);
         this.element.classList.add('active');
-        this.selectedButtonIndex = 0;
+        this.selectedButtonIndex = Array.from(this.element.querySelectorAll('.menu-button')).findIndex(b => b.textContent === 'Start New Run');
+        if (this.isGamepadActive) {
+             this.updateSelection();
+        }
+
         GamepadService.addEventListener('gamepad:any', this.handleAnyGamepadInput);
         GamepadService.addEventListener('gamepad:button', this.handleGamepadInput);
     }

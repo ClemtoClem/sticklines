@@ -100,10 +100,10 @@ class CollectionScreen {
         };
 
         this.element.querySelector('#secret-unlock-btn').onclick = () => {
-            //if (confirm('Unlock all items for discovery? (Session only)')) {
+            if (confirm('Unlock all items for discovery? (Session only)')) {
                 this.gameState.unlockAll();
                 this.render(); // Re-render to show unlocked items
-            //}
+            }
         };
 
         this.element.querySelectorAll('.collection-tab').forEach(tab => {
