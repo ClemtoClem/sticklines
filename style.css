@@ -1467,6 +1467,10 @@ body, html {
     font-size: 20px;
 }
 
+.separation {
+    height: 80px;
+}
+
 @keyframes gradient-shift {
     0% { background-position: 0% 50%; }
     50% { background-position: 100% 50%; }

@@ -64,6 +64,7 @@ class ShopScreen {
                     <button class="menu-button" id="reroll-btn" ${this.isFreeEnchant ? 'disabled' : ''}>Reroll ($${this.gameState.rerollCost})</button>
                     <button class="menu-button" id="sell-btn" ${this.isFreeEnchant ? 'disabled' : ''}>Sell Tiles</button>
                     <button class="menu-button" id="continue-btn">Continue</button>
+                    <div class="separation"></div>
                     <button class="menu-button" id="return-main-menu-btn">Main Menu</button>
                 </div>
             </div>
@@ -100,7 +101,7 @@ class ShopScreen {
             const alreadyOwned = stickers.find(s => s.id === item.id);
             const outOfStock = this.gameState.shopStock.stickers[item.id] <= 0;
             const canBuy = canAfford && !stickersFull && !alreadyOwned && !outOfStock;
-            
+
             let disabledReason = '';
             if (stickersFull) disabledReason = '(Full)';
             else if (alreadyOwned) disabledReason = '(Owned)';
