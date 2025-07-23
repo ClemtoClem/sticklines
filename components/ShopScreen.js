@@ -47,6 +47,9 @@ class ShopScreen {
             this.tooltip.hide();
             this.hideSelectionTooltip();
         }
+        if (isNaN(this.gameState.money)) {
+            this.gameState.money = 0;
+        }
         this.element.innerHTML = `
             <div class="shop-header">
                 <button id="secret-unlock-shop-btn"></button>
@@ -267,11 +270,11 @@ class ShopScreen {
 
     addEventListeners() {
         this.element.querySelector('#secret-unlock-shop-btn').onclick = () => {
-            if (confirm('Unlock all items for this shop visit?')) {
+            //if (confirm('Unlock all items for this shop visit?')) {
                 AudioService.playSoundEffect('enchant_apply');
                 this.gameState.unlockAllShopItems();
                 this.render();
-            }
+            //}
         };
 
         this.element.querySelector('#continue-btn').onclick = () => {
@@ -394,12 +397,12 @@ class ShopScreen {
         if (stickerIndex > -1) {
             const sticker = this.gameState.stickers[stickerIndex];
             const sellPrice = Math.floor(sticker.price / 2);
-            if (confirm(`Sell ${sticker.name} for $${sellPrice}?`)) {
+            //if (confirm(`Sell ${sticker.name} for $${sellPrice}?`)) {
                 this.gameState.money += sellPrice;
                 this.gameState.stickers.splice(stickerIndex, 1);
                 AudioService.playSoundEffect('buy_item'); // Reuse buy sound for selling
                 this.render();
-            }
+            //}
         }
     }
 

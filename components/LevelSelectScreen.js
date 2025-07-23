@@ -247,12 +247,12 @@ class LevelSelectScreen {
                 if (!stickerInfo) return;
 
                 const sellPrice = Math.floor(stickerInfo.price / 2);
-                if (confirm(`Sell ${stickerInfo.name} for $${sellPrice}? This cannot be undone.`)) {
+                //if (confirm(`Sell ${stickerInfo.name} for $${sellPrice}? This cannot be undone.`)) {
                     AudioService.playSoundEffect('buy_item');
                     this.gameState.money += sellPrice;
                     this.gameState.stickers = this.gameState.stickers.filter(s => s.id !== stickerId);
                     this.render();
-                }
+               // }
             };
         });
     }
