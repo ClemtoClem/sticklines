@@ -39,6 +39,7 @@
 <body>
     <div id="app" style="image-rendering: pixelated;"></div>
     <div id="tooltip" class="tooltip"></div>
+    <div id="selection-tooltip" class="selection-tooltip"></div>
     <div id="settings-modal-container"></div>
     <div id="game-over-screen" class="game-over-overlay">
         <div class="game-over-box">
@@ -47,9 +48,11 @@
             <button class="menu-button" id="game-over-back-btn small-button">Back to Menu</button>
         </div>
     </div>
+    <div id="ingrid-tooltip-container" style="position: fixed; pointer-events: none; z-index: 15; left: 494px; top: 601.8px;"></div>
     <div id="loading-screen">
         <div class="loading-text">Loading...</div>
     </div>
+    <!--<div id="debug-toast" class="debug-toast">DEBUG MODE</div>-->
     <script type="module" src="./main.js"></script>
 </body>
 </html>

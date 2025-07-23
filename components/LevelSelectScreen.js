@@ -3,8 +3,6 @@ import AudioService     from '../services/AudioService.js';
 import GameData         from '../data/GameData.js';
 import GamepadService   from '../services/GamepadService.js';
 
-const GAME_MUSIC_PLAYLIST = ['/samba race.mp3', '/rotation.mp3', '/Baskick.mp3', '/Aldebaran.mp3', '/Scoreboard.mp3', '/Onefin Square.mp3'];
-
 class LevelSelectScreen {
     constructor(gameState, navigateTo, tooltip) {
         this.gameState = gameState;
@@ -264,7 +262,7 @@ class LevelSelectScreen {
     }
 
     show(options) {
-        AudioService.playMusic(GAME_MUSIC_PLAYLIST);
+        AudioService.playMusic(GameData.gameMusics);
         this.render();
         this.element.classList.add('active');
         GamepadService.addEventListener('gamepad:any', this.handleAnyGamepadInput);

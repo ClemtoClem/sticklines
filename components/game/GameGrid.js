@@ -76,7 +76,7 @@ class GameGrid {
             <div class="ingrid-tooltip">
                 ${statusText}
                 ${shyText}
-                ${info.interactions > 0 ? `<div>INT: ${info.interactions}</div>` : ''}
+                ${info.interactions > 0 ? `<div>INTERACTIONS: ${info.interactions}</div>` : ''}
                 ${multText ? `<div>MULT: ${multText}</div>` : ''}
             </div>
         `;

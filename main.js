@@ -10,7 +10,7 @@ import AudioService         from './services/AudioService.js';
 import Tooltip              from './components/Tooltip.js';
 import GamepadService       from './services/GamepadService.js';
 
-const GAME_MUSIC_PLAYLIST = ['samba race.mp3', 'rotation.mp3', 'Baskick.mp3', 'Aldebaran.mp3', 'Scoreboard.mp3', 'Onefin Square.mp3'];
+const GAME_MUSIC_PLAYLIST = ['samba_race.mp3', 'rotation.mp3', 'Baskick.mp3', 'Aldebaran.mp3', 'Scoreboard.mp3', 'onefin_square.mp3'];
 
 class App {
     constructor() {
@@ -38,14 +38,14 @@ class App {
     }
 
     async init() {
-        console.log("Initializing Sticklines...");
+        console.log("Initializing Sticklings...");
         AudioService.init(); // Init audio early to capture user interaction
         GamepadService.init();
         await AssetManager.loadAssets();
         console.log("Assets loaded.");
         
         await AudioService.loadSoundEffects({
-            'place_tile': 'sound.mp3',
+            'place_tile': 'place_tile.mp3',
             'ui_click': 'ui_click.mp3',
             'buy_item': 'shop_buy.mp3',
             'reroll': 'shop_reroll.mp3',
@@ -125,9 +125,9 @@ class App {
     }
 
     navigateTo(screenName, options = {}) {
-        if (screenName === 'menu' && this.gameState.runInProgress) {
+        /*if (screenName === 'menu' && this.gameState.runInProgress) {
             this.gameState.reset();
-        }
+        }*/
 
         console.log(`Navigating to ${screenName}`);
         
@@ -139,9 +139,6 @@ class App {
         } else {
             console.error(`Screen "${screenName}" not found!`);
         }
-        /*if (this.gameState.runInProgress && !AudioService.isPlaying()) {
-            AudioService.playMusic(GAME_MUSIC_PLAYLIST);
-        }*/
     }
 }
 

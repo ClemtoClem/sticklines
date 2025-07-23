@@ -13,7 +13,6 @@ import ControlsPanel    from './game/ControlsPanel.js';
 
 const MAX_DECK_SIZE = 40;
 const HAND_SIZE = 7;
-const GAME_MUSIC_PLAYLIST = ['/samba race.mp3', '/rotation.mp3', '/Baskick.mp3', '/Aldebaran.mp3', '/Scoreboard.mp3', '/Onefin Square.mp3'];
 
 class GameScreen {
     constructor(gameState, navigateTo, settingsModal) {
@@ -184,6 +183,7 @@ class GameScreen {
             
             <div class="settings-button-ingame">
                 <button class="menu-button small-button" id="game-settings-btn">Settings</button>
+                <button class="menu-button small-button" id="return-main-menu-btn">Main Menu</button>
             </div>
             
             ${this.isRunFailed ? this.renderRunFailed() : ''}
@@ -323,6 +323,11 @@ class GameScreen {
             AudioService.playSoundEffect('ui_click');
             this.settingsModal.toggle();
         });
+        
+        this.element.querySelector('#return-main-menu-btn')?.addEventListener('click', () => {
+            AudioService.playSoundEffect('ui_click');
+            this.navigateTo("menu");
+        })
 
         // Event delegation for grid interactions
         const gridContainer = this.element.querySelector('#game-grid-container');
@@ -496,7 +501,9 @@ class GameScreen {
         this.gameState.tooltip.hide();
 
         const tileInfo = GameData.tiles[tile.id];
-        if (!tileInfo) return;
+        if (!tileInfo || tileInfo === undefined) return;
+
+        console.log(`tileInfo ${toString(tileInfo)}`);
 
         this.selectionTooltipElement.innerHTML = `
             <div class="selection-tooltip-title">${tileInfo.name}</div>
@@ -810,7 +817,7 @@ class GameScreen {
     }
 
     show(options) {
-        AudioService.playMusic(GAME_MUSIC_PLAYLIST);
+        AudioService.playMusic(GameData.gameMusics);
         this.gamepadActive = false;
         this.initializeLevel(options.levelIndex);
         this.render();

@@ -27,7 +27,10 @@ const GameData = {
         rgb: { id: 'rgb', name: 'RGB', asset: 'rgb_sticker', rarity: 'Common', price: 5, tooltip: 'Red, Green, Blue tiles grant +5 score per interaction.' },
         hourglass: { id: 'hourglass', name: 'Hourglass', asset: 'hourglass_sticker', rarity: 'Uncommon', price: 8, tooltip: '+4 multiplier per hand number.' },
         need_a_hand: { id: 'need_a_hand', name: 'Need a Hand?', asset: 'need_a_hand_sticker', rarity: 'Uncommon', price: 8, tooltip: '+1 maximum hands per level.' },
-    }
+    },
+
+    gameMusics: ['samba_race.mp3', 'rotation.mp3', 'Baskick.mp3', 'Aldebaran.mp3', 'Scoreboard.mp3', 'onefin_square.mp3'],
+    menuMusics: ['onefin_square.mp3', 'Scoreboard.mp3'],
 };
 
 export default GameData;

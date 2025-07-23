@@ -1,11 +1,10 @@
-import AssetManager     from '../data/AssetManager.js';
-import GameData         from '../data/GameData.js';
-import AudioService     from '../services/AudioService.js';
-import GamepadService   from '../services/GamepadService.js';
+import AssetManager from '../data/AssetManager.js';
+import GameData from '../data/GameData.js';
+import AudioService from '../services/AudioService.js';
+import GamepadService from '../services/GamepadService.js';
 
 const MAX_DECK_SIZE = 40;
 const STICKER_INITIAL_DURATION = 3;
-const GAME_MUSIC_PLAYLIST = ['/samba race.mp3', '/rotation.mp3', '/Baskick.mp3', '/Aldebaran.mp3', '/Scoreboard.mp3', '/Onefin Square.mp3'];
 
 class ShopScreen {
     constructor(gameState, navigateTo, tooltip) {
@@ -65,6 +64,7 @@ class ShopScreen {
                     <button class="menu-button" id="reroll-btn" ${this.isFreeEnchant ? 'disabled' : ''}>Reroll ($${this.gameState.rerollCost})</button>
                     <button class="menu-button" id="sell-btn" ${this.isFreeEnchant ? 'disabled' : ''}>Sell Tiles</button>
                     <button class="menu-button" id="continue-btn">Continue</button>
+                    <button class="menu-button" id="return-main-menu-btn">Main Menu</button>
                 </div>
             </div>
              ${this.renderStickerDisplay()}
@@ -93,20 +93,21 @@ class ShopScreen {
                 </div>
             `;
         });
-        
-        shopInventory.stickers.forEach(item => {
-             const canAfford = money >= item.price;
-             const stickersFull = stickers.length >= 5;
-             const alreadyOwned = stickers.find(s => s.id === item.id);
-             const outOfStock = this.gameState.shopStock.stickers[item.id] <= 0;
-             const canBuy = canAfford && !stickersFull && !alreadyOwned && !outOfStock;
-             let disabledReason = '';
-             if (stickersFull) disabledReason = '(Full)';
-             else if (alreadyOwned) disabledReason = '(Owned)';
-             else if (outOfStock) disabledReason = '(Out of Stock)';
-             else if (!canAfford) disabledReason = ''; // Price shown is enough reason
 
-             itemsHtml += `
+        shopInventory.stickers.forEach(item => {
+            const canAfford = money >= item.price;
+            const stickersFull = stickers.length >= 5;
+            const alreadyOwned = stickers.find(s => s.id === item.id);
+            const outOfStock = this.gameState.shopStock.stickers[item.id] <= 0;
+            const canBuy = canAfford && !stickersFull && !alreadyOwned && !outOfStock;
+            
+            let disabledReason = '';
+            if (stickersFull) disabledReason = '(Full)';
+            else if (alreadyOwned) disabledReason = '(Owned)';
+            else if (outOfStock) disabledReason = '(Out of Stock)';
+            else if (!canAfford) disabledReason = ''; // Price shown is enough reason
+
+            itemsHtml += `
                 <div class="shop-item" data-tooltip-type="stickers" data-tooltip-id="${item.id}" data-item-type="sticker" data-item-id="${item.id}">
                     <div class="shop-item-icon" style="background-image: url(${AssetManager.getImage(item.asset).src}); border-color: var(--color-rarity-${item.rarity.toLowerCase()})"></div>
                     <div class="shop-item-name">${item.name}</div>
@@ -117,7 +118,7 @@ class ShopScreen {
                 </div>
             `;
         });
-        
+
         shopInventory.enchantments.forEach(item => {
             const canAfford = money >= item.price;
             itemsHtml += `
@@ -134,15 +135,15 @@ class ShopScreen {
 
         return itemsHtml;
     }
-    
+
     renderStickerDisplay() {
         if (this.gameState.stickers.length === 0) return '';
         return `
             <div class="sticker-display">
                 ${this.gameState.stickers.map(stickerState => {
-                    const stickerData = this.gameState.stickers.find(s => s.id === stickerState.id);
-                    const stickerInfo = GameData.stickers[stickerState.id];
-                    return `
+            const stickerData = this.gameState.stickers.find(s => s.id === stickerState.id);
+            const stickerInfo = GameData.stickers[stickerState.id];
+            return `
                     <div class="sticker-item" 
                         data-tooltip-type="stickers" 
                         data-tooltip-id="${stickerInfo.id}"
@@ -160,14 +161,14 @@ class ShopScreen {
     }
 
     renderModal() {
-        switch(this.activeModal) {
+        switch (this.activeModal) {
             case 'enchant': return this.renderEnchantModal();
             case 'sell': return this.renderSellModal();
             case 'sell-detail': return this.renderSellDetailModal();
             default: return '';
         }
     }
-    
+
     renderEnchantModal() {
         const deckCounts = this.gameState.deck.reduce((acc, tile) => {
             if (!acc[tile.id]) acc[tile.id] = { id: tile.id, count: 0, enchanted: 0 };
@@ -183,16 +184,16 @@ class ShopScreen {
                     <p>${this.isFreeEnchant ? 'Select a tile type to apply your free' : "Pay the enchanter's fee and apply the"} '${this.enchantmentToApply.name}' enchantment.</p>
                     <div class="modal-grid">
                         ${Object.values(deckCounts).map(tileData => {
-                            const allEnchanted = tileData.count === tileData.enchanted;
-                            const fullData = GameData.tiles[tileData.id];
-                            return `
+            const allEnchanted = tileData.count === tileData.enchanted;
+            const fullData = GameData.tiles[tileData.id];
+            return `
                             <div class="modal-item ${allEnchanted ? 'disabled' : ''}" data-type="enchant-tile" data-id="${tileData.id}">
                                 <div class="modal-item-icon" style="background-image: url(${AssetManager.getImage(fullData.asset).src})"></div>
                                 <span class="modal-item-name">${fullData.name}</span>
                                 <span class="modal-item-count">${tileData.enchanted}/${tileData.count}</span>
                             </div>
                             `;
-                        }).join('')}
+        }).join('')}
                     </div>
                     <div class="modal-footer">
                         <button class="menu-button" id="modal-cancel-btn">Cancel</button>
@@ -201,29 +202,29 @@ class ShopScreen {
             </div>
         `;
     }
-    
+
     renderSellModal() {
-         const deckCounts = this.gameState.deck.reduce((acc, tile) => {
+        const deckCounts = this.gameState.deck.reduce((acc, tile) => {
             if (!acc[tile.id]) acc[tile.id] = { id: tile.id, count: 0 };
             acc[tile.id].count++;
             return acc;
         }, {});
-        
+
         return `
              <div class="modal-overlay">
                 <div class="modal-content">
                     <h2>Sell Tiles (Deck: ${this.gameState.deck.length}/${MAX_DECK_SIZE})</h2>
                     <div class="modal-grid">
                          ${Object.values(deckCounts).map(tileData => {
-                            const fullData = GameData.tiles[tileData.id];
-                            return `
+            const fullData = GameData.tiles[tileData.id];
+            return `
                             <div class="modal-item" data-type="sell-select" data-id="${tileData.id}">
                                 <div class="modal-item-icon" style="background-image: url(${AssetManager.getImage(fullData.asset).src})"></div>
                                 <span class="modal-item-name">${fullData.name}</span>
                                 <span class="modal-item-count">x${tileData.count}</span>
                             </div>
                             `;
-                        }).join('')}
+        }).join('')}
                     </div>
                     <div class="modal-footer">
                         <button class="menu-button" id="modal-cancel-btn">Close</button>
@@ -234,7 +235,7 @@ class ShopScreen {
     }
 
     renderSellDetailModal() {
-        const tilesOfType = this.gameState.deck.map((t, i) => ({...t, originalIndex: i})).filter(t => t.id === this.sellTileType);
+        const tilesOfType = this.gameState.deck.map((t, i) => ({ ...t, originalIndex: i })).filter(t => t.id === this.sellTileType);
         const tileInfo = GameData.tiles[this.sellTileType];
         const sellPrice = this.gameState.getSellPrice(tileInfo.id);
         const sellableTilesCount = tilesOfType.filter(t => !t.enchantment).length;
@@ -282,6 +283,10 @@ class ShopScreen {
             this.activeModal = 'sell';
             this.render();
         };
+        this.element.querySelector('#return-main-menu-btn').onclick = () => {
+            AudioService.playSoundEffect('ui_click');
+            this.navigateTo('menu');
+        }
 
         this.element.querySelectorAll('.buy-btn').forEach(btn => btn.onclick = (e) => this.handleBuy(e));
         this.element.querySelectorAll('.sell-sticker-btn').forEach(btn => btn.onclick = (e) => this.handleSellSticker(e));
@@ -320,7 +325,7 @@ class ShopScreen {
                 this.activeModal = 'sell-detail';
                 this.render();
             });
-            if(this.element.querySelector('[data-type="back-to-sell-menu"]')) {
+            if (this.element.querySelector('[data-type="back-to-sell-menu"]')) {
                 this.element.querySelector('[data-type="back-to-sell-menu"]').onclick = () => {
                     AudioService.playSoundEffect('ui_click');
                     this.activeModal = 'sell';
@@ -328,7 +333,7 @@ class ShopScreen {
                 };
             }
             this.element.querySelectorAll('[data-type="sell-one"]').forEach(btn => btn.onclick = e => this.handleSellOne(e));
-            if(this.element.querySelector('[data-type="sell-two"]')) {
+            if (this.element.querySelector('[data-type="sell-two"]')) {
                 this.element.querySelector('[data-type="sell-two"]').onclick = () => this.handleSellTwo();
             }
         }
@@ -339,7 +344,7 @@ class ShopScreen {
         const itemElement = e.currentTarget;
         const itemId = itemElement.dataset.itemId;
         const itemType = itemElement.dataset.itemType;
-        
+
         const itemData = GameData[`${itemType}s`][itemId];
         if (!itemData) return;
 
@@ -368,12 +373,12 @@ class ShopScreen {
                 success = true;
             }
         } else if (type === 'enchantment') {
-            this.enchantmentToApply = {...GameData.enchantments[id], price };
+            this.enchantmentToApply = { ...GameData.enchantments[id], price };
             this.activeModal = 'enchant';
             this.render();
             return; // Don't deduct money yet
         }
-        
+
         if (success) {
             this.gameState.money -= price;
             AudioService.playSoundEffect('buy_item');
@@ -381,7 +386,7 @@ class ShopScreen {
         this.hideSelectionTooltip();
         this.render();
     }
-    
+
     handleSellSticker(e) {
         const { id } = e.currentTarget.dataset;
         const stickerIndex = this.gameState.stickers.findIndex(s => s.id === id);
@@ -407,7 +412,7 @@ class ShopScreen {
             this.render();
         }
     }
-    
+
     handleEnchant(e) {
         const tileId = e.currentTarget.dataset.id;
         const success = this.gameState.enchantTile(tileId, this.enchantmentToApply.id);
@@ -416,7 +421,7 @@ class ShopScreen {
                 this.gameState.money -= this.enchantmentToApply.price;
             }
             AudioService.playSoundEffect('enchant_apply');
-            
+
             // If it was a free enchant, go back to level select.
             if (this.isFreeEnchant) {
                 this.isFreeEnchant = false;
@@ -425,7 +430,7 @@ class ShopScreen {
                 this.navigateTo('levelSelect');
                 return; // Prevent re-render of shop
             } else {
-                 // otherwise re-render shop with updated state.
+                // otherwise re-render shop with updated state.
                 this.activeModal = null;
                 this.enchantmentToApply = null;
                 this.gamepadFocus = 'grid'; // Reset focus
@@ -433,7 +438,7 @@ class ShopScreen {
             }
         }
     }
-    
+
     handleSellOne(e) {
         const index = parseInt(e.currentTarget.dataset.index);
         const tile = this.gameState.deck[index];
@@ -444,15 +449,15 @@ class ShopScreen {
             this.render();
         }
     }
-    
+
     handleSellTwo() {
         const indicesToSell = this.gameState.deck
-            .map((t, i) => ({...t, originalIndex: i}))
+            .map((t, i) => ({ ...t, originalIndex: i }))
             .filter(t => t.id === this.sellTileType && !t.enchantment)
             .slice(-2) // Get the last 2 sellable tiles
             .map(t => t.originalIndex)
-            .sort((a,b) => b-a); // sort descending to not mess up indices when splicing
-            
+            .sort((a, b) => b - a); // sort descending to not mess up indices when splicing
+
         if (indicesToSell.length === 2) {
             indicesToSell.forEach(index => {
                 this.gameState.sellTile(index);
@@ -500,7 +505,7 @@ class ShopScreen {
         if (selectedEl) {
             selectedEl.classList.add('gamepad-selected');
             selectedEl.focus();
-            
+
             // Update selection tooltip for gamepad navigation
             if (this.gamepadFocus === 'grid' && !this.activeModal) {
                 const itemId = selectedEl.dataset.itemId;
@@ -544,7 +549,7 @@ class ShopScreen {
             }
             focusedEl?.click();
         };
-        
+
         if (detail.button === 'A' && detail.down) {
             // Clicking via gamepad should not hide the tooltip immediately, the action will.
             clickFocused();
@@ -552,8 +557,8 @@ class ShopScreen {
         }
 
         if (detail.button === 'B' && detail.down && this.activeModal) {
-             this.element.querySelector('#modal-cancel-btn')?.click();
-             return;
+            this.element.querySelector('#modal-cancel-btn')?.click();
+            return;
         }
 
         if (this.activeModal) {
@@ -599,7 +604,7 @@ class ShopScreen {
     }
 
     show(options) {
-        AudioService.playMusic(GAME_MUSIC_PLAYLIST);
+        AudioService.playMusic(GameData.gameMusics);
         this.isGamepadActive = false; // Reset on show
         this.isFreeEnchant = false;
         if (options && options.freeEnchantment) {
@@ -648,7 +653,7 @@ class ShopScreen {
 
         const itemRect = itemElement.getBoundingClientRect();
         const tooltipRect = this.selectionTooltipElement.getBoundingClientRect();
-        
+
         let top = itemRect.bottom + 10; // 10px spacing below the item
         let left = itemRect.left + (itemRect.width / 2) - (tooltipRect.width / 2);
 

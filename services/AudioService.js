@@ -6,21 +6,21 @@ class AudioService {
         this.gainNode = null;
         this.currentMusicSource = null;
         this.playlist = [];
-        this.currentTrackIndex = 0;
+        this.currentTrackIndex = -1; // -1 indique qu'aucune piste n'est sélectionnée
         this.isInitialized = false;
-        this.soundData = {}; // Will store ArrayBuffers
-        this.decodedSoundBuffers = {}; // Will store decoded AudioBuffers
-        this._musicPlaylistToPlay = null; // To hold music requested before init
-        this.currentPlaylist = null; // Track the current playlist for checks
-        this.isLoading = false; // To prevent starting new music while one is loading
+        this.soundData = {}; // Stocke les ArrayBuffers
+        this.decodedSoundBuffers = {}; // Stocke les AudioBuffers décodés
+        this._musicPlaylistToPlay = null;
+        this.currentPlaylistIdentifier = null; // Pour suivre la playlist active
+        this.isLoading = false; // Verrou pour empêcher les lectures multiples
 
-        this.musicVolume = 0.5; // Default volume at 50%
+        this.musicVolume = 0.5; // Volume par défaut
         this.isMuted = false;
     }
 
     init() {
         if (this.isInitialized) return;
-        
+
         const userInteraction = () => {
             if (this.audioContext === null) {
                 try {
@@ -30,30 +30,27 @@ class AudioService {
                     this.setVolume(this.musicVolume);
                     if (this.isMuted) this.setMute(true);
 
-                    console.log("AudioContext created.");
+                    console.log("AudioContext créé.");
                     this.decodeAllSounds();
-                    // If music was requested before context was ready, play it now.
+
                     if (this._musicPlaylistToPlay) {
                         this.playMusic(this._musicPlaylistToPlay.playlist, this._musicPlaylistToPlay.startWith);
                         this._musicPlaylistToPlay = null;
                     }
                 } catch (e) {
-                    console.error("Failed to create AudioContext:", e);
-                    return; // Can't proceed without an audio context
+                    console.error("Échec de la création de l'AudioContext:", e);
+                    return;
                 }
             }
-            // Remove the event listener after the first interaction
             window.removeEventListener('click', userInteraction, true);
             window.removeEventListener('keydown', userInteraction, true);
             this.isInitialized = true;
         };
 
-        // AudioContext can only be started after a user interaction.
-        // Use capture phase to ensure it runs before other click handlers.
         window.addEventListener('click', userInteraction, true);
         window.addEventListener('keydown', userInteraction, true);
     }
-    
+
     async loadSoundEffects(effects) {
         const promises = [];
         for (const key in effects) {
@@ -69,7 +66,7 @@ class AudioService {
             const arrayBuffer = await response.arrayBuffer();
             this.soundData[key] = arrayBuffer;
         } catch (error) {
-            console.error(`Error loading sound data for ${key}:`, error);
+            console.error(`Error loading data for ${key}:`, error);
         }
     }
 
@@ -77,9 +74,8 @@ class AudioService {
         if (!this.audioContext) return;
         console.log("Decoding all loaded sounds...");
         for (const key in this.soundData) {
-            if (!this.decodedSoundBuffers[key]) { // Don't re-decode
+            if (!this.decodedSoundBuffers[key]) {
                 try {
-                    // We need to copy the buffer because decodeAudioData can sometimes be destructive.
                     const bufferCopy = this.soundData[key].slice(0);
                     const audioBuffer = await this.audioContext.decodeAudioData(bufferCopy);
                     this.decodedSoundBuffers[key] = audioBuffer;
@@ -93,113 +89,124 @@ class AudioService {
 
     playSoundEffect(key) {
         if (!this.audioContext || !this.decodedSoundBuffers[key]) {
-             if (!this.isInitialized) {
-                console.warn(`Audio not initialized. Can't play ${key}.`);
-             } else {
-                console.warn(`Sound effect '${key}' not found or not decoded.`);
-             }
+            console.warn(`Sound effect '${key}' not found or not initialized.`);
             return;
         }
         const source = this.audioContext.createBufferSource();
         source.buffer = this.decodedSoundBuffers[key];
-        source.connect(this.audioContext.destination); // Sound effects play at full volume
+        source.connect(this.audioContext.destination);
         source.start(0);
     }
 
     playMusic(playlist, startWith = null) {
-        // If music is already playing or currently loading, do nothing.
-        if (this.isPlaying() || this.isLoading) {
-            // And if it's the same playlist, we definitely don't need to do anything.
-            if (this.currentPlaylist && JSON.stringify(this.currentPlaylist) === JSON.stringify(playlist)) {
-                return;
-            }
+        const playlistId = JSON.stringify(playlist);
+        if (this.isLoading || this.currentPlaylistIdentifier === playlistId) {
+            console.log("Music already playing or loading for this playlist.");
+            return;
         }
         
-        // If other music is playing, stop it first.
-        this.stopMusic();
-        
+        this.stopMusic(); // Arrête toute musique précédente
+
         if (!this.audioContext) {
-            console.warn("AudioContext not ready, music deferred.");
-            this._musicPlaylistToPlay = { playlist, startWith }; // Store playlist and start track
+            console.warn("AudioContext not ready, music playback is delayed.");
+            this._musicPlaylistToPlay = { playlist, startWith };
             return;
         }
 
-        this.playlist = [...playlist]; // Make a copy
-        this.currentPlaylist = playlist; // Store reference for comparison
-        if (this.playlist.length === 0) return;
-        
-        if (startWith && Array.isArray(startWith) && startWith.length > 0) {
-            // Pick a random starting track from the provided list
-            const startTrack = startWith[Math.floor(Math.random() * startWith.length)];
-            const startIndex = this.playlist.indexOf(startTrack);
-
-            if (startIndex !== -1) {
-                // Move the chosen start track to the beginning of the shuffled playlist
-                this.playlist.splice(startIndex, 1);
-                this.playlist.sort(() => Math.random() - 0.5); // Shuffle the rest
-                this.playlist.unshift(startTrack); // Add start track to the front
-                this.currentTrackIndex = 0;
-            } else {
-                // If start track not in playlist, just shuffle
-                this.playlist.sort(() => Math.random() - 0.5);
-                this.currentTrackIndex = 0;
-            }
-        } else {
-             this.currentTrackIndex = Math.floor(Math.random() * this.playlist.length);
+        if (!playlist || playlist.length === 0) {
+            return;
         }
 
-        this.playNextTrack();
+        this.playlist = [...playlist];
+        this.currentPlaylistIdentifier = playlistId;
+        this.currentTrackIndex = 0; // On commence à la première piste
+
+        // Logique pour mélanger et choisir la piste de départ
+        if (startWith && Array.isArray(startWith) && startWith.length > 0) {
+            const startTrack = startWith[Math.floor(Math.random() * startWith.length)];
+            const startIndex = this.playlist.indexOf(startTrack);
+            if (startIndex !== -1) {
+                this.playlist.splice(startIndex, 1); // Retire l'élément
+                this.playlist.sort(() => Math.random() - 0.5); // Mélange le reste
+                this.playlist.unshift(startTrack); // Le place au début
+            } else {
+                this.playlist.sort(() => Math.random() - 0.5); // Mélange tout si non trouvé
+            }
+        } else {
+            this.playlist.sort(() => Math.random() - 0.5); // Mélange si pas de piste de départ
+        }
+        
+        this._playTrack();
     }
 
-    async playNextTrack() {
-        if (this.playlist.length === 0 || this.currentMusicSource || this.isLoading) return;
+    async _playTrack() {
+        if (this.currentTrackIndex === -1 || this.playlist.length === 0 || this.isLoading) {
+            return;
+        }
 
         this.isLoading = true;
+        this.currentMusicSource = null;
+
         const trackUrl = PREFIX_SOUND_PATH + this.playlist[this.currentTrackIndex];
-        
+        console.log(`Track loading: ${trackUrl}`);
+
         try {
             const response = await fetch(trackUrl);
             const arrayBuffer = await response.arrayBuffer();
             const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+            
+            this.isLoading = false;
+
+            // Vérifie si une autre commande (stopMusic, etc.) n'a pas été appelée pendant le chargement
+            if (this.currentTrackIndex === -1) {
+                 console.log("Playback was canceled while loading.");
+                 return;
+            }
 
             this.currentMusicSource = this.audioContext.createBufferSource();
             this.currentMusicSource.buffer = audioBuffer;
             this.currentMusicSource.connect(this.gainNode);
-            this.currentMusicSource.start();
-            this.isLoading = false; // Finished loading and is now playing
-
+            
+            // L'événement onended est la seule source de vérité pour passer à la piste suivante
             this.currentMusicSource.onended = () => {
-                this.currentMusicSource = null; // Clear the source before playing next
                 this.currentTrackIndex = (this.currentTrackIndex + 1) % this.playlist.length;
-                this.playNextTrack();
+                this._playTrack(); // Enchaîne avec la piste suivante
             };
+
+            this.currentMusicSource.start(0);
+            console.log(`Reading of : ${trackUrl}`);
+
         } catch (error) {
-            console.error(`Error playing audio track ${trackUrl}:`, error);
-            this.isLoading = false; // Reset loading state on error
-            // In case of error, clear source and try next track after a delay
-            this.currentMusicSource = null; 
+            console.error(`Error reading track${trackUrl}:`, error);
+            this.isLoading = false;
+            // Passe à la piste suivante après un court délai en cas d'erreur
             setTimeout(() => {
-                 this.currentTrackIndex = (this.currentTrackIndex + 1) % this.playlist.length;
-                 this.playNextTrack();
-            }, 1000);
+                 if (this.currentTrackIndex !== -1) { // Ne pas continuer si la musique a été arrêtée
+                    this.currentTrackIndex = (this.currentTrackIndex + 1) % this.playlist.length;
+                    this._playTrack();
+                 }
+            }, 2000);
         }
     }
 
     stopMusic() {
         if (this.currentMusicSource) {
-            this.currentMusicSource.onended = null; // Prevent looping
-            this.currentMusicSource.stop();
+            this.currentMusicSource.onended = null; // Très important pour éviter l'enchaînement
+            this.currentMusicSource.stop(0);
             this.currentMusicSource = null;
         }
+        // Réinitialise l'état pour permettre une nouvelle lecture
         this.playlist = [];
-        this.currentPlaylist = null;
-        this.isLoading = false; // Ensure loading is reset when stopping
+        this.currentPlaylistIdentifier = null;
+        this.currentTrackIndex = -1;
+        this.isLoading = false;
     }
 
     isPlaying() {
-        return this.currentMusicSource !== null;
+        return this.currentMusicSource !== null && !this.isLoading;
     }
 
+    // ... Le reste des méthodes (setVolume, toggleMute, etc.) reste inchangé ...
     setVolume(volume) {
         this.musicVolume = parseFloat(volume);
         if (this.gainNode && !this.isMuted) {

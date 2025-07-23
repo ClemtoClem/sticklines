@@ -3,8 +3,6 @@ import GameData         from '../data/GameData.js';
 import AudioService     from '../services/AudioService.js';
 import GamepadService   from '../services/GamepadService.js';
 
-const MENU_MUSIC_PLAYLIST = ['Onefin Square.mp3', 'Scoreboard.mp3'];
-
 class MenuScreen {
     constructor(gameState, navigateTo, settingsModal) {
         this.gameState = gameState;
@@ -155,7 +153,8 @@ class MenuScreen {
     }
 
     show() {
-        AudioService.playMusic(MENU_MUSIC_PLAYLIST);
+        AudioService.stopMusic();
+        AudioService.playMusic(GameData.menuMusics);
         this.element.classList.add('active');
         this.selectedButtonIndex = Array.from(this.element.querySelectorAll('.menu-button')).findIndex(b => b.textContent === 'Start New Run');
         if (this.isGamepadActive) {
